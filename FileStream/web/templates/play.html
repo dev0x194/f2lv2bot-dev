@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en" class="dark scroll-smooth" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+  <title>{{ file_name }} — {{ bot_brand }}</title>
+
+  <!-- Google Fonts: Geist, Inter, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Design System & Player Stylesheets -->
+  <link rel="stylesheet" href="/static/tokens.css?v={{ version }}" />
+  <link rel="stylesheet" href="/static/main.css?v={{ version }}" />
+  <link rel="stylesheet" href="/static/player.css?v={{ version }}" />
+
+  <!-- Official Vidstack Player Themes & Components -->
+  <link rel="stylesheet" href="https://cdn.vidstack.io/player/theme.css" />
+  {% if is_audio %}
+  <link rel="stylesheet" href="https://cdn.vidstack.io/player/audio.css" />
+  {% else %}
+  <link rel="stylesheet" href="https://cdn.vidstack.io/player/video.css" />
+  {% endif %}
+  <script type="module" src="https://cdn.vidstack.io/player" data-version="player@1.15.6"></script>
+
+  <!-- Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-black text-[#ededed] font-sans antialiased min-h-screen flex flex-col selection:bg-white selection:text-black">
+  <!-- Subtle Background Grid & Radial Glow -->
+  <div class="fixed inset-0 bg-grid-pattern pointer-events-none z-0"></div>
+  <div class="fixed inset-0 bg-radial-vignette pointer-events-none z-0"></div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-50 w-full border-b border-white/[0.08] bg-black/80 backdrop-blur-xl">
+    <div class="w-full max-w-[1200px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2.5 group">
+        <div class="w-6 h-6 rounded-md bg-white flex items-center justify-center text-black font-bold text-xs tracking-tighter transition-transform group-hover:scale-95">
+          ▲
+        </div>
+        <span class="font-semibold tracking-tight text-white text-sm flex items-center gap-1.5">
+          {{ bot_brand }}
+        </span>
+      </a>
+
+      <div class="flex items-center gap-2">
+        {% if bot_join_url %}
+        <a href="{{ bot_join_url }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-black bg-white rounded-full hover:bg-zinc-200 transition-all active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.2)]" target="_blank" rel="noopener noreferrer">
+          <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+          <span>Join Bot</span>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Player Page Container -->
+  <main class="player-page relative z-10 flex-1 w-full max-w-[1200px] mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col">
+    <!-- Top Ad Slot (Desktop & Mobile) -->
+    {% if ad_config and ad_config.desktop and ad_config.desktop.top_banner and ad_config.desktop.top_banner.enabled %}
+    <div class="ad-slot-wrapper hidden sm:flex mb-3">
+      <span class="text-[10px] font-mono uppercase tracking-widest text-zinc-600 mb-1">Sponsored</span>
+      <div class="ad-slot"
+        data-device="{{ ad_config.desktop.top_banner.device }}"
+        data-key="{{ ad_config.desktop.top_banner.key }}"
+        data-width="{{ ad_config.desktop.top_banner.width }}"
+        data-height="{{ ad_config.desktop.top_banner.height }}"
+        data-invoke-url="{{ ad_config.desktop.top_banner.invoke_url }}"></div>
+    </div>
+    {% endif %}
+
+    {% if ad_config and ad_config.mobile and ad_config.mobile.top_banner and ad_config.mobile.top_banner.enabled %}
+    <div class="ad-slot-wrapper flex sm:hidden mb-3">
+      <span class="text-[10px] font-mono uppercase tracking-widest text-zinc-600 mb-1">Sponsored</span>
+      <div class="ad-slot"
+        data-device="{{ ad_config.mobile.top_banner.device }}"
+        data-key="{{ ad_config.mobile.top_banner.key }}"
+        data-width="{{ ad_config.mobile.top_banner.width }}"
+        data-height="{{ ad_config.mobile.top_banner.height }}"
+        data-invoke-url="{{ ad_config.mobile.top_banner.invoke_url }}"></div>
+    </div>
+    {% endif %}
+
+    <!-- Player Card Shell -->
+    <section id="playerView" class="fs-card p-3 sm:p-5 shadow-2xl backdrop-blur-xl animate-fade-in w-full">
+      <!-- Player Top Bar: Back Button + Cleanly Truncated Filename -->
+      <div class="flex items-center justify-between mb-3 gap-2 w-full">
+        <button id="backBtn" type="button" class="shrink-0 min-h-[40px] px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/[0.08] transition flex items-center gap-1.5 active:scale-95" title="Go Back">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          <span>Back</span>
+        </button>
+        <h1 class="text-xs sm:text-sm font-medium text-zinc-300 text-right truncate flex-1 min-w-0" title="{{ file_name }}">
+          {{ file_name }}
+        </h1>
+      </div>
+
+      <!-- Real Vidstack Player Container (Visible Immediately) -->
+      <div class="player-container w-full aspect-video rounded-xl overflow-hidden bg-black border border-white/10 relative shadow-2xl">
+        <!-- Connecting & State Overlay -->
+        <div id="playerOverlay" role="status" aria-live="polite" class="unsupported-overlay absolute inset-0 bg-black/80 backdrop-blur-md z-30 flex flex-col items-center justify-center p-4 text-center transition-all duration-200">
+          <!-- Spinner for Loading / Authenticating -->
+          <div id="playerOverlaySpinner" class="w-10 h-10 rounded-full border-2 border-white/20 border-t-white animate-spin mb-3"></div>
+
+          <!-- Unsupported Media State Inside / Over Vidstack Player -->
+          <div id="unsupportedBox" class="flex flex-col items-center justify-center max-w-sm sm:max-w-md w-full animate-fade-in hidden">
+            <div class="w-12 h-12 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-3">
+              <i data-lucide="video-off" class="w-6 h-6 text-purple-400"></i>
+            </div>
+            <div id="playerOverlayBadge" class="mb-2">
+              <span id="unsupportedBadgeText" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                MKV • HEVC is not supported here
+              </span>
+            </div>
+            <h2 id="playerOverlayText" class="text-sm sm:text-base font-semibold text-white tracking-tight">
+              Browser cannot play this format
+            </h2>
+            <p id="playerOverlaySub" class="text-xs text-zinc-400 mt-1.5 max-w-xs leading-relaxed">
+              Browser playback is not supported for this file.
+            </p>
+            <div id="unsupportedActions" class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4 w-full">
+              <button id="overlayVlcBtn" type="button" class="min-h-[44px] px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 shadow-md">
+                <i data-lucide="play" class="w-3.5 h-3.5 fill-white"></i>
+                <span>Open in VLC</span>
+              </button>
+              <button id="overlayExtBtn" type="button" class="min-h-[44px] px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 border border-white/10">
+                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                <span id="overlayExtBtnText">External Player</span>
+              </button>
+              <button id="overlayDownloadBtn" type="button" class="min-h-[44px] px-3 py-2 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                <span>Download</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Network / Generic Error State Inside / Over Player -->
+          <div id="errorBox" class="flex flex-col items-center justify-center max-w-sm w-full hidden">
+            <div id="playerOverlayIcon" class="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mb-3">
+              <i data-lucide="alert-circle" class="w-6 h-6 text-rose-400"></i>
+            </div>
+            <h2 id="errorTitle" class="text-sm sm:text-base font-semibold text-white">Playback Error</h2>
+            <p id="errorDesc" class="text-xs text-zinc-400 mt-1 max-w-xs leading-relaxed">Unable to connect to the media server.</p>
+            <div id="errorActions" class="flex items-center justify-center gap-2 mt-4 w-full">
+              <button id="playerRetryBtn" type="button" class="min-h-[44px] px-4 py-2 bg-white text-black text-xs font-semibold rounded-xl hover:bg-zinc-200 transition active:scale-95">
+                Retry Connection
+              </button>
+              <button id="fallbackDirectBtn" type="button" class="min-h-[44px] px-4 py-2 bg-zinc-800 text-zinc-300 text-xs font-medium rounded-xl hover:bg-zinc-700 transition active:scale-95 border border-white/10">
+                Direct Download
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading State Inside Player -->
+          <div id="loadingBox" class="flex flex-col items-center justify-center">
+            <div class="text-xs font-semibold text-white tracking-wide">Connecting Direct Stream…</div>
+            <div class="text-[11px] text-zinc-400 mt-1">Initializing hardware decoder and range buffers.</div>
+          </div>
+        </div>
+
+        <!-- The Real Vidstack Web Component -->
+        {% if is_audio %}
+        <media-player id="video-player" class="player audio-player w-full" title="{{ file_name }}" playsinline crossorigin>
+          <media-provider>
+            <audio id="nativeAudioPlayer" preload="metadata" playsinline></audio>
+          </media-provider>
+          <media-audio-layout id="vidstackLayout"></media-audio-layout>
+        </media-player>
+        {% else %}
+        <media-player id="video-player" class="player w-full h-full is-landscape" title="{{ file_name }}" playsinline crossorigin>
+          <media-provider>
+            <video id="nativeVideoPlayer" preload="metadata" playsinline poster="/thumb/{{ public_id }}" class="w-full h-full object-contain"></video>
+            <media-poster class="vds-poster" src="/thumb/{{ public_id }}" alt="{{ file_name }}"></media-poster>
+          </media-provider>
+          <media-video-layout id="vidstackLayout"></media-video-layout>
+        </media-player>
+        {% endif %}
+      </div>
+
+      <!-- Action Buttons Row Under Player -->
+      <button id="playBtn" type="button" class="hidden" aria-hidden="true" tabindex="-1">Watch Now</button>
+      <div class="action-buttons grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 mt-4 w-full">
+        <button id="downloadBtn" type="button" class="min-h-[44px] rounded-xl text-xs font-semibold bg-white text-black hover:bg-zinc-200 transition flex items-center justify-center gap-2 active:scale-95 shadow-sm">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          <span>Download</span>
+        </button>
+        <button id="playerShareBtn" type="button" class="min-h-[44px] rounded-xl text-xs font-medium text-zinc-200 border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition flex items-center justify-center gap-2 active:scale-95">
+          <i data-lucide="share-2" class="w-4 h-4 text-zinc-400"></i>
+          <span>Share</span>
+        </button>
+        <button id="playerVlcBtn" type="button" class="min-h-[44px] rounded-xl text-xs font-semibold text-orange-400 border border-orange-500/25 bg-orange-500/10 hover:bg-orange-500/15 transition flex items-center justify-center gap-2 active:scale-95">
+          <i data-lucide="play" class="w-4 h-4 fill-orange-400"></i>
+          <span>Open in VLC</span>
+        </button>
+        <button id="playerExtBtn" type="button" class="min-h-[44px] rounded-xl text-xs font-medium text-zinc-200 border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition flex items-center justify-center gap-2 active:scale-95">
+          <i data-lucide="external-link" class="w-4 h-4 text-zinc-400"></i>
+          <span id="playerExtBtnText">External Player</span>
+        </button>
+        <button id="playerCopyUrlBtn" type="button" class="col-span-2 sm:col-span-1 min-h-[44px] rounded-xl text-xs font-medium text-zinc-200 border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition flex items-center justify-center gap-2 active:scale-95">
+          <i data-lucide="copy" class="w-4 h-4 text-zinc-400"></i>
+          <span>Copy Stream URL</span>
+        </button>
+      </div>
+
+      <!-- Action Feedback Notice / Toast -->
+      <div id="overlayNotice" class="mt-3 px-4 py-2 bg-zinc-900 border border-white/15 text-zinc-200 text-xs rounded-xl flex items-center justify-between hidden animate-fade-in">
+        <span id="overlayNoticeText">Stream URL copied</span>
+        <button id="noticeCloseBtn" type="button" class="ml-2 text-zinc-400 hover:text-white">✕</button>
+      </div>
+
+      <!-- File Telemetry & Specs Shelf -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mt-4 pt-3.5 border-t border-white/[0.08] font-mono text-center">
+        <div class="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+          <div class="text-zinc-500 text-[10px] uppercase tracking-wider">FORMAT</div>
+          <div class="text-xs font-semibold text-white mt-0.5 truncate uppercase">{{ container_format }}</div>
+        </div>
+        <div class="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+          <div class="text-zinc-500 text-[10px] uppercase tracking-wider">PAYLOAD</div>
+          <div class="text-xs font-semibold text-white mt-0.5 truncate">{{ file_size }}</div>
+        </div>
+        <div class="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+          <div class="text-zinc-500 text-[10px] uppercase tracking-wider">RESOLUTION</div>
+          <div id="detectedQuality" class="text-xs font-semibold text-white mt-0.5 truncate">{{ resolution or 'Auto' }}</div>
+        </div>
+        <div class="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+          <div class="text-zinc-500 text-[10px] uppercase tracking-wider">VIDEO CODEC</div>
+          <div id="detectedCodec" class="text-xs font-semibold text-white mt-0.5 truncate">{{ video_codec or 'Standard' }}</div>
+        </div>
+        <div class="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+          <div class="text-zinc-500 text-[10px] uppercase tracking-wider">AUDIO CODEC</div>
+          <div id="detectedAudio" class="text-xs font-semibold text-white mt-0.5 truncate">{{ audio_codec or 'Standard' }}</div>
+        </div>
+        <div class="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+          <div class="text-zinc-500 text-[10px] uppercase tracking-wider">DURATION</div>
+          <div id="metaDuration" class="text-xs font-semibold text-white mt-0.5 truncate">{{ formatted_duration or 'Loading metadata…' }}</div>
+        </div>
+      </div>
+
+      <!-- Additional Actions: Telegram & Report -->
+      <div class="flex items-center justify-between mt-3 pt-2 text-xs">
+        {% if telegram_url %}
+        <a href="{{ telegram_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-zinc-400 hover:text-white transition">
+          <i data-lucide="send" class="w-3.5 h-3.5 text-zinc-500"></i>
+          <span>Open in Telegram</span>
+        </a>
+        {% else %}
+        <span></span>
+        {% endif %}
+
+        {% if report_url %}
+        <a href="{{ report_url }}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-mono text-zinc-600 hover:text-zinc-400 transition">
+          Report Content
+        </a>
+        {% endif %}
+      </div>
+
+      <!-- Player Diagnostics Bar -->
+      <div class="flex items-center justify-between text-[11px] font-mono text-zinc-500 mt-3 pt-2.5 border-t border-white/[0.08]">
+        <div class="flex items-center gap-1.5">
+          <span id="playerStatePill" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="playerStateText">INITIALIZING</span>
+        </div>
+        <div id="playerSourceText" class="truncate max-w-[200px]">Direct Edge Stream</div>
+      </div>
+    </section>
+
+    <!-- Bottom Ad Banner (Desktop & Mobile) -->
+    {% if ad_config and ad_config.mobile and ad_config.mobile.bottom_banner and ad_config.mobile.bottom_banner.enabled %}
+    <div class="ad-slot-wrapper flex sm:hidden mt-4">
+      <span class="text-[10px] font-mono uppercase tracking-widest text-zinc-600 mb-1">Sponsored</span>
+      <div class="ad-slot"
+        data-device="{{ ad_config.mobile.bottom_banner.device }}"
+        data-key="{{ ad_config.mobile.bottom_banner.key }}"
+        data-width="{{ ad_config.mobile.bottom_banner.width }}"
+        data-height="{{ ad_config.mobile.bottom_banner.height }}"
+        data-invoke-url="{{ ad_config.mobile.bottom_banner.invoke_url }}"></div>
+    </div>
+    {% endif %}
+
+    {% if ad_config and ad_config.desktop and ad_config.desktop.inline_banner and ad_config.desktop.inline_banner.enabled %}
+    <div class="ad-slot-wrapper hidden sm:flex mt-4">
+      <span class="text-[10px] font-mono uppercase tracking-widest text-zinc-600 mb-1">Sponsored</span>
+      <div class="ad-slot"
+        data-device="{{ ad_config.desktop.inline_banner.device }}"
+        data-key="{{ ad_config.desktop.inline_banner.key }}"
+        data-width="{{ ad_config.desktop.inline_banner.width }}"
+        data-height="{{ ad_config.desktop.inline_banner.height }}"
+        data-invoke-url="{{ ad_config.desktop.inline_banner.invoke_url }}"></div>
+    </div>
+    {% endif %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/[0.08] bg-black text-xs text-zinc-500 py-6 mt-auto">
+    <div class="w-full max-w-[1200px] mx-auto px-4 sm:px-6 flex items-center justify-between">
+      <span>{{ bot_brand }} · Edge Gateway</span>
+      <div class="flex gap-4 text-zinc-400">
+        <a href="{{ legal_url }}" class="hover:text-white transition">Terms</a>
+        <a href="{{ privacy_url }}" class="hover:text-white transition">Privacy</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Core App & Unified Vidstack Player Architecture -->
+  <script src="/static/app.js?v={{ version }}"></script>
+  <script src="/static/player.js?v={{ version }}"></script>
+
+  <script>
+    (function () {
+      'use strict';
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+
+      const fileConfig = {
+        fileId: {{ public_id | tojson }},
+        fileName: {{ file_name | tojson }},
+        shareUrl: {{ share_url | tojson }},
+        downloadTokenPath: {{ download_token_path | tojson }},
+        streamTokenPath: {{ stream_token_path | tojson }},
+        pageToken: {{ page_token | tojson }},
+        fileDuration: Number({{ file_duration | default(0) | tojson }}) || 0,
+        isPlayable: {{ 'true' if is_playable else 'false' }},
+        isAudio: {{ 'true' if is_audio else 'false' }},
+        isVideo: {{ 'true' if is_video else 'false' }},
+        containerFormat: {{ container_format | tojson }},
+        videoCodec: {{ video_codec | tojson }},
+        audioCodec: {{ audio_codec | tojson }},
+        resolution: {{ resolution | tojson }},
+        smartlinkUrl: {{ (ad_config.smartlink_url if ad_config else '') | tojson }}
+      };
+
+      let streamAbortController = null;
+      let currentEpoch = Date.now();
+      let failsafeTimer = null;
+      let vidstackPlayer = null;
+
+      // Card Spotlight Hover Effect
+      if (window.FS && window.FS.Motion) {
+        window.FS.Motion.initSpotlight();
+      }
+
+      // Format Duration Clock if serverDuration available
+      const metaDuration = document.getElementById('metaDuration');
+      if (metaDuration && fileConfig.fileDuration > 0) {
+        const h = Math.floor(fileConfig.fileDuration / 3600);
+        const m = Math.floor((fileConfig.fileDuration % 3600) / 60);
+        const s = fileConfig.fileDuration % 60;
+        metaDuration.textContent = h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
+      }
+
+      // Auto-Detect Resolution & Codec Pills if not already rendered
+      const qualityEl = document.getElementById('detectedQuality');
+      const codecEl = document.getElementById('detectedCodec');
+      if (qualityEl && (!qualityEl.textContent || qualityEl.textContent === 'Auto')) {
+        const qMatch = fileConfig.fileName.match(/(\b2160p|\b1080p|\b720p|\b480p|\b4k\b)/i);
+        if (qMatch) {
+          qualityEl.textContent = qMatch[0].toUpperCase();
+        }
+      }
+      if (codecEl && (!codecEl.textContent || codecEl.textContent === 'Standard')) {
+        const cMatch = fileConfig.fileName.match(/(\bx265\b|\bx264\b|\bhevc\b|\bavc\b|\b10bit\b)/i);
+        if (cMatch) {
+          codecEl.textContent = cMatch[0].toUpperCase();
+        }
+      }
+
+      // Notice helper
+      const overlayNotice = document.getElementById('overlayNotice');
+      const overlayNoticeText = document.getElementById('overlayNoticeText');
+      const noticeCloseBtn = document.getElementById('noticeCloseBtn');
+      if (noticeCloseBtn && overlayNotice) {
+        noticeCloseBtn.addEventListener('click', () => overlayNotice.classList.add('hidden'));
+      }
+
+      function showNotice(text) {
+        if (overlayNotice && overlayNoticeText) {
+          overlayNoticeText.textContent = text;
+          overlayNotice.classList.remove('hidden');
+        }
+        if (window.FS && window.FS.Toast) {
+          window.FS.Toast.info(text, 3500);
+        }
+      }
+
+      // Download & Share Actions
+      const playerDownloadBtn = document.getElementById('playerDownloadBtn');
+      const overlayDownloadBtn = document.getElementById('overlayDownloadBtn');
+      const fallbackDirectBtn = document.getElementById('fallbackDirectBtn');
+      const playerShareBtn = document.getElementById('playerShareBtn');
+
+      function triggerDownload() {
+        if (fileConfig.smartlinkUrl) {
+          window.open(fileConfig.smartlinkUrl, '_blank', 'noopener,noreferrer');
+        }
+        if (window.FS && window.FS.triggerDownload) {
+          window.FS.triggerDownload(fileConfig.downloadTokenPath, fileConfig.pageToken);
+        } else {
+          window.location.href = fileConfig.downloadTokenPath;
+        }
+      }
+
+      if (playerDownloadBtn) playerDownloadBtn.addEventListener('click', triggerDownload);
+      if (overlayDownloadBtn) overlayDownloadBtn.addEventListener('click', triggerDownload);
+      if (fallbackDirectBtn) fallbackDirectBtn.addEventListener('click', triggerDownload);
+
+      function triggerShare() {
+        if (window.FS && window.FS.Share) {
+          window.FS.Share.copy(fileConfig.shareUrl, 'Link copied to clipboard!');
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(fileConfig.shareUrl).then(() => {
+            showNotice('Link copied to clipboard!');
+          });
+        }
+      }
+
+      if (playerShareBtn) playerShareBtn.addEventListener('click', triggerShare);
+
+      // Back Button Action
+      const backBtn = document.getElementById('backBtn');
+      if (backBtn) {
+        backBtn.addEventListener('click', () => {
+          if (document.referrer && window.history.length > 1) {
+            window.history.back();
+          } else {
+            window.location.href = '/';
+          }
+        });
+      }
+
+      // Teardown Helper
+      function teardownPlayer(playerEl, layoutEl) {
+        if (playerEl) {
+          try {
+            playerEl.pause();
+            playerEl.src = '';
+          } catch (_) {}
+        }
+        if (layoutEl) {
+          layoutEl.thumbnails = '';
+        }
+        if (streamAbortController) {
+          streamAbortController.abort();
+          streamAbortController = null;
+        }
+      }
+
+      // Player Controller Integration (Vidstack is Visible Immediately)
+      if (fileConfig.isPlayable && window.FSPlayer) {
+        const playerElement = document.getElementById('video-player') || document.getElementById('player');
+        const playerStatePill = document.getElementById('playerStatePill');
+        const playerStateText = document.getElementById('playerStateText');
+        const playerSourceText = document.getElementById('playerSourceText');
+        const playerRetryBtn = document.getElementById('playerRetryBtn');
+
+        const controller = new window.FSPlayer.PlayerController({
+          playerElement: playerElement,
+          streamTokenPath: fileConfig.streamTokenPath,
+          pageToken: fileConfig.pageToken,
+          fileId: fileConfig.fileId,
+          fileName: fileConfig.fileName,
+          isAudio: fileConfig.isAudio,
+          isVideo: fileConfig.isVideo,
+          fileDuration: fileConfig.fileDuration,
+          onStateChange: (state, details) => {
+            if (playerStateText) playerStateText.textContent = state;
+            if (playerStatePill) {
+              playerStatePill.className = 'w-2 h-2 rounded-full ' +
+                (state === 'PLAYING' ? 'bg-emerald-400' :
+                 state === 'BUFFERING' || state === 'LOADING' ? 'bg-amber-400 animate-pulse' :
+                 state === 'UNSUPPORTED' ? 'bg-purple-400' :
+                 state === 'ERROR' || state === 'NETWORK_ERROR' || state === 'AUTH_ERROR' ? 'bg-rose-500' : 'bg-zinc-600');
+            }
+            if (window.lucide) {
+              window.lucide.createIcons();
+            }
+          }
+        });
+
+        async function startStreaming() {
+          if (streamAbortController) {
+            streamAbortController.abort();
+          }
+          streamAbortController = new AbortController();
+          const signal = streamAbortController.signal;
+          currentEpoch = Date.now();
+
+          if (window.customElements && !customElements.get('media-player')) {
+            try {
+              await Promise.race([
+                customElements.whenDefined('media-player'),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 10000)),
+              ]);
+            } catch (_) {}
+          }
+          vidstackPlayer = playerElement;
+
+          controller.initialize().then(() => {
+            if (playerSourceText) {
+              playerSourceText.textContent = 'Direct Edge Stream';
+            }
+          }).catch(err => {
+            if (signal && signal.aborted) return;
+            console.error('[Vidstack] Initialization catch:', err);
+          });
+        }
+
+        // Start streaming immediately on page load
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', startStreaming);
+        } else {
+          startStreaming();
+        }
+
+        if (playerRetryBtn) playerRetryBtn.addEventListener('click', startStreaming);
+      }
+
+      // Ad Slots
+      if (window.FS && window.FS.Ads) {
+        window.FS.Ads.renderBanners();
+      }
+    })();
+  </script>
+</body>
+</html>

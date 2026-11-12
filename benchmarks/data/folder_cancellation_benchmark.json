@@ -1,0 +1,72 @@
+{
+  "100_files_25pct": {
+    "scenario": "100_files_at_25pct",
+    "total_files": 100,
+    "cancel_percentage": 25,
+    "files_cleaned": 25,
+    "cancellation_time_s": 0.5582,
+    "telegram_api_operations": 1,
+    "mongodb_operations": 3,
+    "batched_tg_delete_calls": 85,
+    "async_tasks_in_flight": 1,
+    "memory_peak_kb": 2690.43,
+    "memory_delta_kb": 2598.52,
+    "cleanup_successful": true
+  },
+  "100_files_50pct": {
+    "scenario": "100_files_at_50pct",
+    "total_files": 100,
+    "cancel_percentage": 50,
+    "files_cleaned": 50,
+    "cancellation_time_s": 0.4411,
+    "telegram_api_operations": 1,
+    "mongodb_operations": 3,
+    "batched_tg_delete_calls": 135,
+    "async_tasks_in_flight": 1,
+    "memory_peak_kb": 160.23,
+    "memory_delta_kb": 128.18,
+    "cleanup_successful": true
+  },
+  "100_files_90pct": {
+    "scenario": "100_files_at_90pct",
+    "total_files": 100,
+    "cancel_percentage": 90,
+    "files_cleaned": 90,
+    "cancellation_time_s": 0.6102,
+    "telegram_api_operations": 1,
+    "mongodb_operations": 3,
+    "batched_tg_delete_calls": 225,
+    "async_tasks_in_flight": 1,
+    "memory_peak_kb": 219.93,
+    "memory_delta_kb": 166.97,
+    "cleanup_successful": true
+  },
+  "500_files_50pct": {
+    "scenario": "500_files_at_50pct",
+    "total_files": 500,
+    "cancel_percentage": 50,
+    "files_cleaned": 250,
+    "cancellation_time_s": 1.7831,
+    "telegram_api_operations": 3,
+    "mongodb_operations": 3,
+    "batched_tg_delete_calls": 475,
+    "async_tasks_in_flight": 1,
+    "memory_peak_kb": 430.12,
+    "memory_delta_kb": 379.35,
+    "cleanup_successful": true
+  },
+  "1000_files_50pct": {
+    "scenario": "1000_files_at_50pct",
+    "total_files": 1000,
+    "cancel_percentage": 50,
+    "files_cleaned": 500,
+    "cancellation_time_s": 3.757,
+    "telegram_api_operations": 5,
+    "mongodb_operations": 3,
+    "batched_tg_delete_calls": 975,
+    "async_tasks_in_flight": 1,
+    "memory_peak_kb": 880.71,
+    "memory_delta_kb": 787.76,
+    "cleanup_successful": true
+  }
+}

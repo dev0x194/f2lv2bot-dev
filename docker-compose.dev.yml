@@ -1,0 +1,44 @@
+name: filetolinkv2bot-dev
+
+services:
+  filestreambot-dev:
+    container_name: filetolinkv2bot-filestreambot-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${FILESTREAM_DEV_IMAGE:-filestreambot:dev}
+    restart: unless-stopped
+    env_file:
+      - dev.env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PORT: ${PORT:-8081}
+      BIND_ADDRESS: 0.0.0.0
+      HAS_SSL: ${HAS_SSL:-False}
+      NO_PORT: ${NO_PORT:-False}
+      FQDN: ${FQDN:-127.0.0.1}
+      SESSION_NAME: ${SESSION_NAME:-FileStreamDev}
+      SESSION_DIR: ${SESSION_DIR:-/app/sessions}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in dev.env}
+      STREAMBOT_LOG_PATH: ${STREAMBOT_LOG_PATH:-/app/streambot_dev.log}
+    ports:
+      # Expose isolated development port on host (e.g. 8081 -> 8081)
+      - "${DEV_HOST_PORT:-8081}:${PORT:-8081}"
+    volumes:
+      - filestream-cache-dev:${STREAM_CACHE_DIR:-/tmp/filestream_dev_stream_cache}
+      - filestream-sessions-dev:/app/sessions
+      # Optional: uncomment for live code mounting during active development
+      # - .:/app
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    name: ${DEV_NETWORK:-filestreambot-dev-network}
+    driver: bridge
+
+volumes:
+  filestream-cache-dev:
+    name: ${DEV_CACHE_VOLUME:-filestream_cache_dev}
+  filestream-sessions-dev:
+    name: ${DEV_SESSIONS_VOLUME:-filestream_sessions_dev}

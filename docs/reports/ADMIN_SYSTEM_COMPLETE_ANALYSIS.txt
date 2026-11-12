@@ -1,0 +1,882 @@
+================================================================================
+FILE TO LINK V2 — ADMIN & OPERATIONAL SUBSYSTEM COMPLETE ANALYSIS
+Document Version: 6.1.0 (Production Verified)
+Inspection Scope: Forensic Architectural Audit of Admin, Operations & Resilience
+Repository: dev0x194/FileToLinkV2bot (/root/FileToLinkV2bot)
+Target Core: FileStream Admin, Storage, Moderation, Monitoring & Observability
+Generated: 2026-09-24
+Status: Code-Verified | Production Tested | 408 Passing Unit, Chaos & HLS Tests
+================================================================================
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. EXECUTIVE ARCHITECTURE OVERVIEW
+   1.1 Ecosystem Context & Multi-Bot Orchestration
+   1.2 Client Role Separation & Isolation (Client 0 vs Secondary Workers)
+   1.3 Privilege Levels & Authorization Hierarchy
+   1.4 Auth Guards, Decorators & Permission Filters
+   1.5 Active Admin Session Tracking & Message State Management
+
+2. COMMAND & CONTROL MATRIX (COMPLETE INVENTORY)
+   2.1 Master Inventory of Administrative Commands
+   2.2 Command Syntax, Signatures & Permission Boundaries
+   2.3 Interactive Callback Navigation & Dynamic Menus
+   2.4 Long-Running Batch & Broadcast Operations
+   2.5 Storage Job Management & Queue Inspection Commands
+   2.6 Client & Worker Pool Lifecycle Controls
+
+3. AUDIT, LOGGING & OBSERVABILITY
+   3.1 Administrative Action Logging Pipeline (admin_audit.py)
+   3.2 High-Throughput Background Audit Task Manager (audit_manager.py)
+   3.3 Multi-Category Log Reader & Secret Redaction Engine (log_reader.py)
+   3.4 Real-Time System & Hardware Metrics Engine (system_info.py)
+   3.5 Central Operational Alerting Engine (alert_manager.py)
+   3.6 Metrics Collection & Prometheus Export (metrics.py)
+
+4. SYSTEM RELIABILITY & RESILIENCE CONTROLS
+   4.1 Per-Client Circuit Breakers & Health Tracking (circuit_breaker.py)
+   4.2 Load Shedding & Admission Control Middleware (load_shedding.py)
+   4.3 IP Rate Limiting & Web Security Hardening
+   4.4 Disaster Recovery & Emergency In-Flight Job Recovery (disaster_recovery.py)
+   4.5 Continuous MongoDB <-> FLOG Reconciliation Engine (flog_sync.py, flog_channels.py)
+   4.6 FloodWait Handling, Backoff & Client Failover
+   4.7 HLS Transcode Concurrency Guardrails & Memory Footprint (hls_service.py)
+
+5. CONTENT MODERATION & USER GOVERNANCE
+   5.1 NSFW Media Scanning & Takedown Pipeline (nsfw_report.py, nsfw.py)
+   5.2 User Lifecycle, Access Whitelisting & Ban Enforcement (user_service.py)
+   5.3 Ephemeral Access Tokens & Path Revocation (token_service.py)
+   5.4 Public Link Lifecycle, Expiration & Token Regeneration
+   5.5 User Preferences & Notification Controls (settings.py)
+
+6. INVARIANTS, FAILURE MODES & GAP ANALYSIS
+   6.1 Hard Architectural Invariants (Invariants A through O)
+   6.2 Verified Failure Modes & Mitigation Mechanisms
+   6.3 Comprehensive Gap Analysis & Production Hardening Recommendations
+   6.4 Production Verification Test Inventory (408 Passing Tests)
+================================================================================
+
+
+================================================================================
+1. EXECUTIVE ARCHITECTURE OVERVIEW
+================================================================================
+
+1.1 Ecosystem Context & Multi-Bot Orchestration
+--------------------------------------------------------------------------------
+The File To Link V2 architecture is a distributed, high-concurrency Telegram file
+streaming and public distribution system. It operates on a multi-client MTProto
+pool connected to an asynchronous web layer (aiohttp) and backed durably by MongoDB
+(Motor async driver).
+
+Within this architecture, the Admin and Operational Subsystem serves as the central
+control plane. It is responsible for:
+  1. Controlling system runtime configurations (URL shorteners, ads, storage modes).
+  2. Managing user authorizations, account restrictions, and moderation takedowns.
+  3. Inspecting, retrying, and cancelling durable storage jobs.
+  4. Monitoring node health, hardware resource saturation, and network performance.
+  5. Maintaining continuous synchronization between MongoDB and Telegram storage channels.
+  6. Enforcing security boundaries, secret masking, and rate limits.
+
+1.2 Client Role Separation & Isolation (Client 0 vs Secondary Workers)
+--------------------------------------------------------------------------------
+A foundational design principle in File To Link V2 is strict physical separation
+between user-facing interactions and high-throughput background file storage:
+
+  - Client 0 (Primary Bot Instance):
+    Represented by the global Pyrogram client instance `FileStream` initialized
+    using `Telegram.BOT_TOKEN`. Client 0 is the exclusive entrypoint for:
+      * User commands (`/start`, `/help`, `/files`, `/settings`, `/stats`).
+      * Administrative commands (`/admin`, `/status`, `/speedtest`, `/ban`, etc.).
+      * Interactive callback queries (`admin:*`, `set:*`).
+      * Direct message routing and user notification delivery.
+    Client 0 is strictly isolated from executing background storage uploads when
+    secondary storage workers are operational.
+
+  - Secondary Worker Clients (MULTI_TOKEN1, MULTI_TOKEN2, ...):
+    Spawned dynamically from `Telegram.MULTI_CLIENTS` or token environment variables.
+    These headless clients run solely within `FileStream/services/storage_service.py`.
+    To ensure absolute worker isolation:
+      * `FileStream/bot/clients.py:is_secondary_worker(client)` verifies whether
+        a client instance is a secondary storage worker.
+      * Secondary clients DO NOT register message handlers, callback handlers, or
+        command plugins.
+      * All incoming update handlers in `FileStream/bot/plugins/` check client
+        identity or register exclusively on `FileStream`. Secondary workers never
+        participate in user messaging, preventing split-brain command processing
+        and MTProto thread contention.
+
+1.3 Privilege Levels & Authorization Hierarchy
+--------------------------------------------------------------------------------
+The system defines a four-tier access hierarchy enforced across all command and
+callback entrypoints:
+
+  Tier 1: System Owner (Superuser)
+    - Identity: `int(Telegram.OWNER_ID)`.
+    - Permissions: Unrestricted access to all system functions.
+    - Exclusive Actions (`OWNER_ONLY_ADMIN_ACTIONS`):
+        * User Governance: `ban`, `unban`, `broadcast`.
+        * Link & File Destructive Actions: `del`, `revoke_link`, `regen_link`, `expire_link`.
+        * Link Inspection: `linkinfo`.
+        * Infrastructure Commands: `status`, `reconcile_flog`.
+        * Worker & Client Management: `drain_worker`, `disable_client`, `enable_client`.
+    - UI Representation: Displays full administrative control menus including
+      "Configuration", "Monitoring", "Users", "Links", "Logs", and "Speedtest".
+
+  Tier 2: Authorized Administrators (Secondary Admins)
+    - Identity: User IDs listed in `Telegram.AUTH_USERS` (parsed into `ADMIN_IDS`
+      via `_build_admin_ids()`).
+    - Permissions: Operational monitoring, log tailing, speedtest execution,
+      storage job inspection and retry, configuration toggles (URL shortener, ads).
+    - Restrictions: Prohibited from executing destructive link actions, banning
+      users, broadcasting, triggering global FLOG reconciliations, or draining workers.
+    - UI Representation: Displays filtered control menus (Configuration, Monitoring,
+      Logs, Speedtest); destructive panels ("Users", "Links") are hidden.
+
+  Tier 3: Standard Registered Users
+    - Identity: Any user present in MongoDB `users` collection whose `banned` flag is False.
+    - Permissions: Standard bot usage (`/start`, `/files`, `/settings`, `/stats`,
+      file ingestion).
+    - Private Mode Restriction: If `Telegram.AUTH_USERS` is populated, non-authorized
+      users are blocked from file ingestion by `UserService.is_user_authorized()`,
+      receiving `ErrorMessages.PRIVATE_BOT`.
+
+  Tier 4: Banned / Restricted Entities
+    - Identity: Any user document where `banned == True`.
+    - Restrictions: Completely barred from bot interaction. Every command entrypoint
+      executes `UserService.is_user_banned()`, which halts execution and renders
+      `LANG.BAN_TEXT`. Channel-level bans render `[🚫 Restricted]` reply markups.
+
+1.4 Auth Guards, Decorators & Permission Filters
+--------------------------------------------------------------------------------
+Authorization is enforced using a combination of Pyrogram message filters and
+explicit handler validation logic:
+
+  1. Pyrogram Filters:
+     - Owner-only commands are decorated with:
+       `@FileStream.on_message(filters.command(...) & filters.private & filters.user(OWNER_ID))`
+       This ensures non-owner messages are dropped at the Pyrogram dispatcher layer.
+     - General admin commands are decorated with:
+       `@FileStream.on_message(filters.command(...) & filters.private)`
+       and subsequently evaluate `message.from_user.id in ADMIN_IDS`.
+
+  2. Callback Query Guards:
+     All admin callbacks matching regex `^admin:` pass through `admin_panel_callback()`
+     in `FileStream/bot/plugins/admin.py`:
+     ```python
+     user_id = query.from_user.id
+     if user_id not in ADMIN_IDS:
+         await query.answer(ErrorMessages.ACCESS_DENIED, show_alert=True)
+         return
+     if action in OWNER_ONLY_ADMIN_ACTIONS and user_id != OWNER_ID:
+         await query.answer(ErrorMessages.OWNER_ONLY, show_alert=True)
+         return
+     ```
+
+1.5 Active Admin Session Tracking & Message State Management
+--------------------------------------------------------------------------------
+To prevent race conditions, button spam, and chat interface clutter, the Admin
+subsystem implements an active message tracking protocol:
+
+  - State Registry:
+    `_ACTIVE_ADMIN_MESSAGES: dict[int, int] = {}` maps `chat_id -> message_id`.
+    This maintains exactly one active administrative dashboard per administrator.
+
+  - Stale Interaction Recovery (`_safe_edit_admin_message`):
+    When an admin clicks a button on an obsolete panel or after Telegram deletes
+    a message:
+      1. Catches `MessageNotModified` and quietly answers the callback (no duplicate API call).
+      2. Catches `MessageIdInvalid` / Telegram HTTP 400.
+      3. Verifies if a newer active admin message exists for the chat.
+      4. If an active panel exists, redirects edits to `client.edit_message_text(chat_id, active_id)`.
+      5. If no active panel exists, removes stale messages and dispatches a fresh
+         panel via `client.send_message()`, updating `_ACTIVE_ADMIN_MESSAGES`.
+
+  - Panel Cleanup on `/admin`:
+    When `/admin` is invoked, `_show_admin_panel()` retrieves the previous panel ID
+    from `_ACTIVE_ADMIN_MESSAGES`, calls `client.delete_messages(chat_id, prior_msg_id)`
+    to eliminate duplicate panels, sends the new dashboard, and records its ID.
+
+
+================================================================================
+2. COMMAND & CONTROL MATRIX (COMPLETE INVENTORY)
+================================================================================
+
+2.1 Master Inventory of Administrative Commands
+--------------------------------------------------------------------------------
+The following table catalogues every administrative command registered in the
+codebase across `FileStream/bot/plugins/admin.py`, `stats.py`, and `nsfw_report.py`:
+
++-------------------+----------------------------+----------+-------------+------------------------------------+
+| Command           | Handler Location           | Auth Req | Target Data | Primary Operational Purpose        |
++-------------------+----------------------------+----------+-------------+------------------------------------+
+| /admin            | admin.py:971               | ADMIN_ID | State       | Launches interactive admin panel   |
+| /status           | admin.py:1692              | OWNER_ID | System/DB   | Detailed host & process metrics    |
+| /botstatus        | admin.py:1711              | ADMIN_ID | System/DB   | Summary status for secondary admins|
+| /speedtest        | admin.py:1732              | ADMIN_ID | Network     | Runs Ookla network benchmark       |
+| /ban <id>         | admin.py:1743              | OWNER_ID | users col   | Sets banned: True on user doc      |
+| /unban <id>       | admin.py:1779              | OWNER_ID | users col   | Sets banned: False on user doc     |
+| /broadcast        | admin.py:1814              | OWNER_ID | users col   | Mass message broadcast with logs   |
+| /del <file_id>    | admin.py:1893              | OWNER_ID | file/FLOG   | Purges file from DB and FLOG chan  |
+| /linkinfo <ref>   | admin.py:1919              | OWNER_ID | links/file  | Inspects public token & target     |
+| /revoke_link <ref>| admin.py:1959              | OWNER_ID | links col   | Sets revoked: True on link token   |
+| /regen_link <ref> | admin.py:1986              | OWNER_ID | links col   | Replaces public token with new ID  |
+| /expire_link <ref>| admin.py:2025              | OWNER_ID | links col   | Updates or clears expires_at epoch |
+| /urlshortener,/ads| admin.py:1452              | ADMIN_ID | Settings    | Toggles URL shortener bypass       |
+| /flogstorage      | admin.py:1507              | ADMIN_ID | FLOG Target | Manages main vs admin FLOG routing |
+| /webads           | admin.py:1622              | ADMIN_ID | Settings    | Toggles streaming web banner ads   |
+| /storage_jobs     | admin.py:2073              | ADMIN_ID | storage_jobs| Lists jobs filtered by status      |
+| /storage_job <id> | admin.py:2121              | ADMIN_ID | storage_jobs| Detailed inspection of single job  |
+| /retry_storage_job| admin.py:2174              | ADMIN_ID | storage_jobs| Resets failed job back to PENDING  |
+| /cancel_storage_jo| admin.py:2200              | ADMIN_ID | storage_jobs| Cancels active/pending storage job |
+| /storage_queue    | admin.py:2228              | ADMIN_ID | Storage Serv| In-memory queue buffer metrics     |
+| /reconcile_flog   | admin.py:2267              | OWNER_ID | FLOG/Mongo  | Triggers 8-discrepancy FLOG reconc |
+| /worker_status    | admin.py:2310              | ADMIN_ID | Worker Pool | Heartbeats of storage workers      |
+| /client_status    | admin.py:2347              | ADMIN_ID | MTProto Pool| Circuit breaker states of clients  |
+| /drain_worker <id>| admin.py:2382              | OWNER_ID | Worker Pool | Gracefully drains specific worker  |
+| /disable_client<i>| admin.py:2405              | OWNER_ID | CircuitBrkr | Manually trips client breaker OPEN |
+| /enable_client <i>| admin.py:2435              | OWNER_ID | CircuitBrkr | Manually resets client breaker     |
+| /rm_adult <target>| nsfw_report.py:211         | ADMIN_ID | NudeNet/File| Moderation scan and file removal   |
+| /stats, /mystats  | stats.py:84                | Public   | Analytics   | User / Admin system statistics     |
+| /id               | admin.py:960               | Public   | Identity    | Resolves chat ID and forwarded IDs |
++-------------------+----------------------------+----------+-------------+------------------------------------+
+
+2.2 Command Syntax, Signatures & Permission Boundaries
+--------------------------------------------------------------------------------
+Detailed operational behavior for primary commands:
+
+  - `/status` (Owner Only):
+    Collects real-time hardware telemetry via `FileStream/utils/system_info.py`:
+      * Hostname, OS platform, kernel release, container environment (Docker/LXC).
+      * CPU logical core count, CPU utilization percentage.
+      * Physical RAM utilization (Total, Used, Free, Percent).
+      * Root disk mount utilization (Total, Used, Free, Percent).
+      * Process-level metrics: RSS memory consumption, CPU%, thread count.
+      * MongoDB round-trip latency (`db.ping()`).
+      * Cached network metadata (Public IP, ISP, ASN, Geo-location).
+
+  - `/del <file_id>` (Owner Only):
+    Executes complete multi-layer purge via `FileStream/utils/file_cleanup.py:delete_file_entry`:
+      1. Resolves file document from MongoDB `file` collection.
+      2. If file belongs to a folder (`is_folder_file=True`), pulls `file_id` from
+         parent folder document's `files` array.
+      3. Deletes backing message from Telegram FLOG channel (`bot.delete_messages`).
+      4. Invalidates active ephemeral streaming tokens in `TokenService`.
+      5. Removes file document from MongoDB `file` collection.
+      6. Deletes public link mapping from `public_links` collection.
+      7. Emits structured admin audit log: `action="DELETE_FILE"`.
+
+  - `/linkinfo`, `/revoke_link`, `/regen_link`, `/expire_link` (Owner Only):
+    Operates on target reference formatted as `public:<token>`, `file:<id>`, or `folder:<id>`.
+    * `_resolve_link_reference(raw)` parses kind and resolves target document.
+    * `/revoke_link` sets `revoked=True`, immediately cutting off web stream access.
+    * `/regen_link` creates a new cryptographic 16-character public ID, updates
+      MongoDB, and invalidates the previous public URL.
+    * `/expire_link <ref> <now|clear|hours>` updates the `expires_at` epoch.
+
+2.3 Interactive Callback Navigation & Dynamic Menus
+--------------------------------------------------------------------------------
+The admin panel routes all callback interactions through a unified dispatcher
+`admin_panel_callback()` decorated with `@FileStream.on_callback_query(filters.regex(r"^admin:"))`:
+
+  - Navigation Router Tree:
+    * `admin:menu:main` -> Renders primary root dashboard.
+    * `admin:menu:config` -> URL shortener, web ads, FLOG storage selection.
+    * `admin:menu:monitoring` -> Queue health, worker status, client circuit breakers.
+    * `admin:menu:users` (Owner Only) -> User lookup, ban management.
+    * `admin:menu:links` (Owner Only) -> Public link inspection and control.
+    * `admin:logs` -> Category selection menu for log inspection.
+    * `admin:logs:view:<category>` -> Tailed log view for specific category.
+    * `admin:logs:refresh:<category>` -> In-place refresh of current log view.
+    * `admin:speedtest` -> Speedtest menu displaying last cached benchmark.
+    * `admin:run_speedtest` -> Triggers live Ookla speedtest with lock guard.
+    * `admin:refresh` -> Re-queries database counters and updates current panel.
+    * `admin:close` -> Deletes active admin message and clears tracking entry.
+
+2.4 Long-Running Batch & Broadcast Operations
+--------------------------------------------------------------------------------
+The `/broadcast` command (admin.py:1814) manages mass-notification delivery
+across all registered bot users with strict rate-limit protection:
+
+  - Execution Flow:
+    1. Requires reply to a source message.
+    2. Initializes broadcast state in `broadcast_ids[broadcast_id] = dict(total, current, failed, success)`.
+    3. Streams user IDs using an unbuffered MongoDB cursor:
+       `db.users.find({}, {"id": 1})`.
+    4. Iterates sequentially via `FileStream/utils/broadcast_helper.py:send_msg()`:
+       * Handles Telegram HTTP 400 `PeerIdInvalid`, `InputUserDeactivated` by
+         marking user deleted in MongoDB (`db.delete_user(user_id)`).
+       * Handles Telegram HTTP 420 `FloodWait` by sleeping for `exc.value + 1` seconds.
+       * Handles generic transmission failures without interrupting the loop.
+    5. Periodically updates administrator status message every iteration.
+    6. Generates persistent broadcast report file on disk: `broadcast_<id>.txt`.
+    7. Emits structured audit log upon completion.
+
+2.5 Storage Job Management & Queue Inspection Commands
+--------------------------------------------------------------------------------
+Direct inspection and intervention for MongoDB persistent storage jobs:
+
+  - `/storage_jobs [status] [limit] [skip]`:
+    Queries `storage_jobs` collection. Filterable by status (`PENDING`, `CLAIMED`,
+    `RUNNING`, `STORED`, `FAILED`, `DEAD_LETTER`). Returns job IDs, file names,
+    file sizes, attempt counts, and assigned worker IDs.
+
+  - `/storage_job <job_id>`:
+    Returns the complete document representation including lease expiration time,
+    stack trace of last failure, client index, and target FLOG channel.
+
+  - `/retry_storage_job <job_id>`:
+    Recovers dead-letter or failed jobs by executing:
+    ```python
+    await db.update_storage_job(job_id, {
+        "status": "PENDING",
+        "worker_id": None,
+        "lease_until": None,
+        "next_retry_at": time.time(),
+        "error": None
+    })
+    ```
+    This immediately surfaces the job to `StorageService` scheduler for re-claiming.
+
+  - `/cancel_storage_job <job_id>`:
+    Sets status to `CANCELLED`, terminating background execution and preventing workers
+    from attempting further FLOG uploads.
+
+2.6 Client & Worker Pool Lifecycle Controls
+--------------------------------------------------------------------------------
+Runtime management of Telegram client circuit breakers and worker tasks:
+
+  - `/worker_status`:
+    Inspects `StorageService` worker pool. Reports number of active worker tasks,
+    minimum required workers (`FLOG_WORKERS_MIN`), maximum worker cap,
+    queue capacity, and per-worker task states.
+
+  - `/client_status`:
+    Polls `ClientCircuitBreaker` instances across all configured Telegram clients
+    (Client 0 through N). Reports operational state (`CLOSED`, `OPEN`, `HALF_OPEN`,
+    `COOLDOWN`), consecutive failure counts, cooldown timers, and last recorded error.
+
+  - `/drain_worker <worker_id>` (Owner Only):
+    Signals a storage worker to cease accepting new jobs and exit once its current
+    file transfer completes.
+
+  - `/disable_client <client_idx>` & `/enable_client <client_idx>` (Owner Only):
+    Manually trips a client circuit breaker to `OPEN` (taking it out of the rotation)
+    or forces a reset to `CLOSED` (restoring it to service).
+
+
+================================================================================
+3. AUDIT, LOGGING & OBSERVABILITY
+================================================================================
+
+3.1 Administrative Action Logging Pipeline (admin_audit.py)
+--------------------------------------------------------------------------------
+The administrative audit pipeline ensures tamper-resistant logging of all control
+plane operations:
+
+  - Ring Buffer Architecture:
+    `_AUDIT_LOG = collections.deque(maxlen=200)` maintains an in-memory ring buffer
+    of `AdminActionEvent` named tuples:
+      * `timestamp: str` (Formatted `YYYY-MM-DD HH:MM:SS`)
+      * `user_id: int` (Telegram ID of actor)
+      * `action: str` (Standardized action identifier, e.g. `BAN_USER`, `DELETE_FILE`)
+      * `details: str` (Target IDs, parameters, error contexts)
+
+  - Dual-Write Ingestion:
+    Every call to `log_admin_action(user_id, action, details)`:
+      1. Appends the structured event to `_AUDIT_LOG`.
+      2. Emits an INFO log entry to the `"FileStream.admin"` logger formatted as:
+         `[ADMIN_ACTION] user={user_id} action={action} - {details}`.
+      3. Critical actions write durably to MongoDB `audit_events` collection via
+         `db.record_audit_event()`.
+
+  - Dashboard Inspection:
+    `get_recent_admin_actions(limit=20)` returns newest-first formatted lines,
+    powering the Telegram `/admin` log viewer.
+
+3.2 High-Throughput Background Audit Task Manager (audit_manager.py)
+--------------------------------------------------------------------------------
+Non-critical administrative logging (such as posting file cards to Telegram FLOG
+channels) must never block file ingestion or starve MTProto worker threads.
+`FileStream/utils/audit_manager.py` implements `AuditTaskManager`:
+
+  - Concurrency Control:
+    Governed by `asyncio.Semaphore(max_concurrent=10)` to prevent Telegram MTProto
+    channel rate-limiting (FloodWait 420).
+
+  - Memory Saturation Protection:
+    `max_queue=250` limits pending tasks. If more than 250 tasks are queued,
+    incoming non-critical audit tasks are safely discarded with DEBUG-level logging.
+
+  - Lifecycle Management:
+    Retains strong task references in `_active_tasks: set[asyncio.Task]` to prevent
+    premature garbage collection by the Python runtime.
+    `audit_manager.shutdown(timeout=3.0)` gracefully drains pending tasks during
+    process termination.
+
+3.3 Multi-Category Log Reader & Secret Redaction Engine (log_reader.py)
+--------------------------------------------------------------------------------
+`FileStream/utils/log_reader.py` provides high-performance on-demand log inspection
+tailored for Telegram mobile screens:
+
+  - Low-Overhead Reverse Tailing (`tail_log_file`):
+    Seeks backward from `os.SEEK_END` by `max_bytes_to_read=512KB`. It parses log
+    headers matching `RE_LOG_HEADER` without loading entire multi-gigabyte log
+    files into process memory.
+
+  - 7 Specialized Log Categories:
+    1. `bot`: Core Pyrogram dispatch, command plugins, user interactions.
+    2. `web`: Aiohttp access logs, streaming responses, byte-range requests.
+    3. `error`: Uncaught exceptions, ERROR/CRITICAL loggers, Python tracebacks.
+    4. `storage`: StorageService worker transfers, job claiming, folder processing.
+    5. `admin`: Control panel clicks, `/ban`, `/del`, merged with `_AUDIT_LOG`.
+    6. `security`: Malicious URL traversal probes, unauthorized access attempts.
+    7. `performance`: FloodWait occurrences, speedtest metrics, queue latencies.
+
+  - Comprehensive Secret Redaction Engine (`redact_secrets`):
+    Before log lines are transmitted to Telegram or rendered in panels, all strings
+    pass through multi-pass regex redaction:
+      * Telegram Bot Tokens: `\b\d{8,11}:[A-Za-z0-9_-]{35}\b` -> `[BOT_TOKEN_REDACTED]`
+      * MongoDB Credentials: `mongodb(+srv)?://[^\s@]+@` -> `\1[REDACTED_CREDENTIALS]@`
+      * MTProto Sessions: Base64 strings > 50 characters -> `[SESSION_REDACTED]`
+      * API Hashes: 32-character hex hashes -> `[API_HASH_REDACTED]`
+      * Generic Secrets: `secret|password|api_key` patterns -> `[REDACTED]`
+      * Runtime Config Values: Direct replacement of active `Telegram.BOT_TOKEN`,
+        `Telegram.API_HASH`, and `Server.DATABASE_URL`.
+
+3.4 Real-Time System & Hardware Metrics Engine (system_info.py)
+--------------------------------------------------------------------------------
+`FileStream/utils/system_info.py` extracts non-invasive system metrics:
+  - OS / Distribution Detection: Parses `/etc/os-release` and `freedesktop_os_release()`.
+  - Virtualization & Containers: Checks `/.dockerenv`, `/run/.containerenv`, and
+    `/proc/1/cgroup` for `docker`, `kubepods`, `containerd`, or `lxc`.
+  - CPU & Memory Telemetry: Logical core counting, `psutil.cpu_percent()`, and
+    `psutil.virtual_memory()` resident set accounting.
+  - Network Caching: Public IPv4/IPv6, ISP name, ASN, and geo-location queried
+    and cached in `_cached_network_info` with a 10-minute TTL (`NETWORK_CACHE_TTL=600`).
+
+3.5 Central Operational Alerting Engine (alert_manager.py)
+--------------------------------------------------------------------------------
+`FileStream/utils/alert_manager.py` implements real-time alerting with throttling:
+
+  - Severity Levels (`AlertSeverity`): `INFO`, `WARNING`, `CRITICAL`.
+  - Alert Throttling & De-duplication:
+    Enforces `throttle_seconds = 300.0` (5 minutes) per alert key. Repeated triggers
+    within the cooldown window are suppressed to prevent notification flooding.
+  - Automated Health Conditions (`evaluate_system_health`):
+    * `MONGODB_DISCONNECTED` (CRITICAL): Triggered if `db.ping()` fails.
+    * `WORKER_POOL_DEGRADED` (WARNING): Triggered if active storage workers fall
+      below `Telegram.FLOG_WORKERS_MIN`.
+    * `QUEUE_BACKED_UP` (WARNING): Triggered if storage queue fill ratio reaches >= 80%.
+    * `CIRCUIT_BREAKER_TRIPPED` (WARNING): Triggered if any client circuit breaker enters `OPEN`.
+    * `HIGH_DEAD_LETTER_RATE` (WARNING): Triggered if dead-letter jobs exceed 20.
+    * `FLOG_CHANNEL_DEGRADED` (CRITICAL): Triggered if FLOG storage channels become unreachable.
+
+3.6 Metrics Collection & Prometheus Export (metrics.py)
+--------------------------------------------------------------------------------
+`FileStream/utils/metrics.py` tracks rolling system metrics:
+  - Percentile latency calculation for streaming requests (P50, P90, P99).
+  - Storage job throughput counters (submitted, stored, failed, dead-letter).
+  - Web streaming throughput (total bytes served, active range requests).
+  - Prometheus-compatible text exporter available at `/metrics`.
+
+
+================================================================================
+4. SYSTEM RELIABILITY & RESILIENCE CONTROLS
+================================================================================
+
+4.1 Per-Client Circuit Breakers & Health Tracking (circuit_breaker.py)
+--------------------------------------------------------------------------------
+Each Telegram MTProto client (Client 0 through N) is guarded by an independent
+`ClientCircuitBreaker` instance:
+
+  - 4-State Machine:
+    * `CLOSED`: Normal operation. Client accepts jobs.
+    * `OPEN`: Client failed consecutively >= `failure_threshold` (default 5).
+      Client is isolated; all job dispatching to this client is halted.
+    * `HALF_OPEN`: Cooldown elapsed (`cooldown_duration`, default 30s). A single
+      canary job is permitted to probe connectivity (`_probe_in_flight = True`).
+      If canary succeeds, breaker transitions back to `CLOSED`. If canary fails,
+      breaker trips back to `OPEN`.
+    * `COOLDOWN`: Temporary backoff state.
+
+  - FloodWait Immunity:
+    Calls to `record_failure(is_floodwait=True)` DO NOT increment the circuit breaker
+    failure count. FloodWait represents transient Telegram rate limiting, not client
+    unhealthiness.
+
+  - Fatal Error Handling:
+    `record_failure(is_fatal=True)` permanently trips the circuit breaker for 1 year,
+    isolating de-authorized bots or corrupted session strings until admin intervention.
+
+4.2 Load Shedding & Admission Control Middleware (load_shedding.py)
+--------------------------------------------------------------------------------
+`FileStream/utils/load_shedding.py` provides HTTP-level admission control:
+
+  - Dual-Trigger Shedding Conditions (`LoadShedder.should_shed`):
+    1. Queue Fill Saturation: Activated when `queue_size / queue_capacity >= 0.9` (90%).
+    2. Error Rate Spike: Activated when HTTP failure rate exceeds 50% (`error_rate >= 0.5`)
+       over a 60-second sliding window (`min_samples >= 5`).
+
+  - Shedding Behavior:
+    When active, incoming requests to streaming/download paths immediately receive
+    HTTP 503 Service Unavailable, preserving database and MTProto worker stability.
+
+4.3 IP Rate Limiting & Web Security Hardening
+--------------------------------------------------------------------------------
+  - Sliding Window IP Rate Limiter (`IPRateLimiter`):
+    Enforces a maximum of 60 requests per 60 seconds per remote IP.
+    Memory is bounded to 10,000 tracked IPs with LRU-style eviction.
+    Violations yield HTTP 429 Too Many Requests with `Retry-After: 60`.
+
+  - Security Hardener & Path Traversal Prevention:
+    * Blocked Scanner Patterns: Immediately blocks automated web scanners querying
+      `/.env`, `/.git`, `/wp-admin`, `/.aws/credentials`, `/actuator`, etc.
+    * Path Traversal Sanitization: `sanitize_download_path()` validates all `/dl/`
+      and `/watch/` URLs, rejecting `../`, `..\`, `%2e%2e`, and encoded variations.
+    * Path Length Enforcement: Rejects URLs exceeding 512 characters.
+
+4.4 Disaster Recovery & Emergency In-Flight Job Recovery (disaster_recovery.py)
+--------------------------------------------------------------------------------
+  - Schema & Index Verification (`verify_database_schema`):
+    Validates presence and index integrity across 8 vital collections:
+    `file`, `users`, `folders`, `storage_jobs`, `worker_health`, `client_health`,
+    `audit_events`, `metrics_snapshots`.
+
+  - Emergency Job Recovery Routine (`emergency_recover_all_inflight_jobs`):
+    Disaster recovery procedure executed after catastrophic node failure:
+    ```python
+    res = await db.storage_jobs.update_many(
+        {"status": {"$in": ["CLAIMED", "RUNNING", "PROCESSING"]}},
+        {"$set": {
+            "status": "PENDING",
+            "lease_until": None,
+            "worker_id": None,
+            "assigned_client_id": None,
+            "next_retry_at": time.time(),
+            "updated_at": time.time()
+        }}
+    )
+    ```
+    Resets stranded jobs without data loss, permitting clean re-acquisition.
+
+  - Backup Verification (`verify_backup_directory`):
+    Validates filesystem database dumps (`mongodump`), verifying non-empty data files
+    for `file`, `users`, and `storage_jobs`.
+
+4.5 Continuous MongoDB <-> FLOG Reconciliation Engine (flog_sync.py, flog_channels.py)
+--------------------------------------------------------------------------------
+A continuous background daemon (`_sync_loop`) runs every 300 seconds (configurable
+via `FLOG_RECONCILIATION_INTERVAL_SECONDS`), identifying and repairing 8 discrepancy classes:
+
+  1. `MISSING_FLOG_REFERENCE`: File exists in MongoDB with `flog_msg_id`, but the
+     backing message in Telegram FLOG channel is deleted or empty. Repaired by
+     purging the orphan document from MongoDB via `delete_file_entry`.
+  2. `ORPHAN_FLOG_MESSAGE`: Message exists in Telegram channel but is missing from DB.
+  3. `MISMATCHED_FLOG_REFERENCE`: File record points to an incorrect FLOG channel ID.
+  4. `UNSETTLED_STORAGE_JOB`: Storage job running indefinitely past threshold.
+  5. `STORED_FILE_PENDING_JOB` (Crash-After-FLOG): Telegram message was posted
+     successfully, but the process crashed before the job document was updated to
+     `STORED`. Repaired by linking `flog_msg_id` and transitioning job to `STORED`.
+  6. `FAILED_JOB_WITH_FLOG`: Job was marked failed or dead-letter, but Telegram
+     message actually exists in the channel. Repaired by marking job `STORED`.
+  7. `EXPIRED_LEASE`: Worker crashed while processing; lease expired. Repaired by
+     resetting job to `PENDING`.
+  8. `STALE_STORAGE_STATUS`: File document has non-terminal status (`PENDING`, `UPLOADING`)
+     while the underlying storage job has already reached `STORED` or `FAILED`.
+     Repaired by synchronizing the file document status with the storage job.
+
+4.6 FloodWait Handling, Backoff & Client Failover
+--------------------------------------------------------------------------------
+When Telegram MTProto returns `pyrogram.errors.FloodWait(x)`:
+  1. The client catches the exception and extracts the required sleep duration.
+  2. If the operation is part of background storage ingestion, the job lease is
+     extended and the specific client is put into a temporary cooldown.
+  3. The storage service dynamically fails over the job to another available client
+     in `multi_clients`.
+  4. The circuit breaker failure counter is NOT incremented.
+
+4.7 HLS Transcode Concurrency Guardrails & Memory Footprint (hls_service.py)
+--------------------------------------------------------------------------------
+The Adaptive Bitrate Streaming (HLS) and on-demand transcoding engine incorporates
+strict resource guardrails to ensure host stability and prevent resource exhaustion:
+
+  1. Bounded Transcoding Concurrency:
+     - Real-time video transcoding is CPU- and I/O-intensive. `HLSService` enforces an
+       explicit concurrency ceiling via `asyncio.Semaphore(Server.HLS_MAX_TRANSCODES=3)`.
+     - When three concurrent transcode operations are active, subsequent requests
+       asynchronously wait for a semaphore permit rather than launching unthrottled
+       FFmpeg processes that could trigger host CPU starvation or OOM events.
+
+  2. Subprocess Lifecycle Management & Immediate Cancellation:
+     - Each active FFmpeg pipeline is encapsulated within an `HLSJob` record tracking
+       the subprocess handle (`asyncio.subprocess.Process`), stdin feeder task, and
+       creation timestamp.
+     - If a client disconnects, navigates away, or aborts the video stream, the route
+       catches `asyncio.CancelledError` or client abort and invokes `job.cancel()`.
+     - Subprocess termination sends `SIGTERM` (escalating to `SIGKILL` if unyielding)
+       and safely cancels the background stdin feeder task, eliminating zombie FFmpeg
+       processes and orphaned file descriptors.
+
+  3. Automated Idle Session Reaper:
+     - An asynchronous background reaper runs every 30 seconds (`_idle_reaper_loop`),
+       evaluating the last activity timestamp of all running HLS transcode jobs.
+     - Jobs remaining idle for longer than `Server.HLS_IDLE_TIMEOUT` (600 seconds) are
+       automatically aborted and their working state reclaimed.
+
+  4. Zero-Copy Fast-Path & Minimal Memory Footprint:
+     - For source media already encoded in H.264 video with AAC audio, `HLSService`
+       selects the zero-copy fast-path (`-c:v copy -c:a copy -f hls`), bypassing CPU
+       re-encoding entirely and executing at native I/O speed.
+     - Ingestion streams chunks over `asyncio.subprocess` stdin pipes (`pipe:0`) using
+       `virtual_faststart_stream()`. Video data flows in small 512KB-1MB buffer chunks
+       directly from MTProto into FFmpeg without buffering whole multi-gigabyte files
+       into RAM. Peak process memory footprint per job remains bounded to <16MB.
+
+  5. Segment Disk Ring-Buffer & LRU Eviction:
+     - Generated HLS segments (`seg_{segment_id}.ts`) and playlists are cached under
+       `Server.STREAM_CACHE_DIR/hls/{file_id}/{quality}/`.
+     - `_prune_disk_cache()` executes LRU pruning when disk utilization thresholds
+       are reached, purging the oldest unaccessed segment directories.
+
+
+================================================================================
+5. CONTENT MODERATION & USER GOVERNANCE
+================================================================================
+
+5.1 NSFW Media Scanning & Takedown Pipeline (nsfw_report.py, nsfw.py)
+--------------------------------------------------------------------------------
+The moderation subsystem integrates automated computer vision scanning with
+user-driven reporting:
+
+  - Workflow Architecture:
+    1. A user flags media via bot interface or an admin runs `/rm_adult <id>`.
+    2. `process_report()` verifies `Telegram.NUDENET_CHANNEL`. If configured,
+       creates a unique report record in `nsfw_reports` collection.
+    3. Dispatches a review card to the moderation channel:
+       `SafetyMessages.channel_report_text(...)` with status `Reviewing...`.
+    4. An asynchronous worker task (`_finalize`) fetches the backing Telegram
+       message from the FLOG channel.
+    5. Passes media to `FileStream/utils/nsfw.py:scan_message()` (NudeNet detector).
+    6. For folders, iterates through all constituent files (`_scan_folder_by_id`).
+    7. Flagged Outcome (Blocked):
+       * Deletes file/folder from MongoDB and FLOG channel.
+       * Sends warning notification to uploader (`SafetyMessages.CONTENT_REMOVED`).
+       * Sends confirmation to reporter (`SafetyMessages.REPORT_REMOVED`).
+       * Edits channel moderation card to `Removed (NSFW)`.
+       * Updates `nsfw_reports` document (`status: "removed", reason: reason`).
+    8. Clean Outcome:
+       * Edits channel moderation card to `Reviewed (kept)`.
+       * Updates `nsfw_reports` document (`status: "kept"`).
+
+5.2 User Lifecycle, Access Whitelisting & Ban Enforcement (user_service.py)
+--------------------------------------------------------------------------------
+`FileStream/services/user_service.py` manages user state:
+  - Account Discovery: Automatically registers new users in `users` collection upon
+    first command interaction.
+  - Ban Enforcement:
+    * `/ban <user_id>` -> `db.users.update_one({"id": user_id}, {"$set": {"banned": True}})`.
+    * `/unban <user_id>` -> `db.users.update_one({"id": user_id}, {"$set": {"banned": False}})`.
+    * Interceptor: Every message and callback query executes `is_user_banned()`. If
+      banned, command execution halts immediately and renders `LANG.BAN_TEXT`.
+  - Private Whitelist Mode:
+    If `Telegram.AUTH_USERS` is populated, `is_user_authorized()` restricts access
+    to whitelisted IDs only.
+
+5.3 Ephemeral Access Tokens & Path Revocation (token_service.py)
+--------------------------------------------------------------------------------
+`FileStream/services/token_service.py` governs ephemeral streaming and download URLs:
+  - Token Lifecycle:
+    Generates 32-character cryptographically secure tokens (`secrets.token_urlsafe(32)`).
+    Supports configurable expiration (`expires_in_seconds`, default 300s) and single-use
+    constraints (`single_use=True`).
+  - Path Revocation:
+    When a file is modified, deleted, or revoked by an administrator,
+    `invalidate_access_tokens_for_path(path)` immediately purges all active tokens
+    for that file, instantly terminating ongoing or attempted streams.
+
+5.4 Public Link Lifecycle, Expiration & Token Regeneration
+--------------------------------------------------------------------------------
+Public file and folder links (`/watch/<public_id>`, `/dl/<public_id>`) are managed
+via `public_links` collection in MongoDB:
+  - Revocation: `/revoke_link` sets `revoked: True`. Web server returns HTTP 404/410.
+  - Regeneration: `/regen_link` creates a new random token, updates MongoDB, and
+    invalidates the old link without requiring file re-upload.
+  - Expiration: `/expire_link` sets a future unix timestamp. Evaluated at request time;
+    expired tokens are rejected.
+
+5.5 User Preferences & Notification Controls (settings.py)
+--------------------------------------------------------------------------------
+`FileStream/bot/plugins/settings.py` provides self-service user controls:
+  - Notifications: Toggle upload completion alerts (`notifications_enabled`).
+  - Privacy: Toggle user ID attribution on public links.
+  - Localization: Language preferences stored in user profile.
+
+
+================================================================================
+6. INVARIANTS, FAILURE MODES & GAP ANALYSIS
+================================================================================
+
+6.1 Hard Architectural Invariants (Invariants A through O)
+--------------------------------------------------------------------------------
+The reliability of File To Link V2 is guaranteed by 15 architectural invariants,
+validated under chaos conditions in `tests/test_v6_invariants_chaos.py`:
+
+  - INVARIANT A & B: MongoDB is the authoritative durable state for storage jobs;
+    `asyncio.Queue` is strictly an in-memory execution buffer.
+    * Proof: Purging the local `asyncio.Queue` and wiping memory maps leaves jobs
+      intact in MongoDB, ready for scheduler re-acquisition.
+
+  - INVARIANT C: Process restart durability.
+    * Proof: Terminating the application process leaves pending jobs in MongoDB.
+      A newly initialized service instance reclaims and completes them without loss.
+
+  - INVARIANT D & E: Worker crashes leave safely expiring leases.
+    * Proof: If a worker terminates abruptly while processing, `lease_until` expires
+      after 300 seconds. `recover_expired_leases()` resets the job to `PENDING`
+      for another worker to acquire.
+
+  - INVARIANT F: Atomic claiming prevents dual acquisition.
+    * Proof: Concurrent workers executing `find_one_and_update` on MongoDB atomically
+      claim distinct jobs; no two workers can claim the same job ID simultaneously.
+
+  - INVARIANT G: Terminal `STORED` jobs cannot regress.
+    * Proof: Once a job transitions to `STORED`, background reconciliation, retries,
+      or lease recovery can never revert it to `FAILED` or `PENDING`.
+
+  - INVARIANT H: Storage operation idempotency.
+    * Proof: Ingesting an already-stored file returns the existing FLOG reference
+      and public link without creating duplicate FLOG messages.
+
+  - INVARIANT I & J: Strict isolation of Client 0 and secondary storage workers.
+    * Proof: Client 0 never executes file upload jobs when secondary workers exist;
+      secondary storage workers never process user commands or callbacks.
+
+  - INVARIANT K & L: Folder vs standalone file isolation.
+    * Proof: Folder files are flagged with `is_folder_file=True`. Deleting a standalone
+      file cannot alter folder contents, and folder operations never leak into
+      the standalone file catalog.
+
+  - INVARIANT M: FLOG continuous reconciliation idempotency.
+    * Proof: Successive reconciliation runs produce identical state and never delete
+      verified active files.
+
+  - INVARIANT N: Comprehensive administrative auditability.
+    * Proof: Every admin action (`/ban`, `/del`, `/revoke_link`) produces a durable
+      audit record in memory and MongoDB.
+
+  - INVARIANT O: Graceful shutdown lease safety.
+    * Proof: Shutting down the storage service cleanly releases claimed jobs back
+      to `PENDING` without stranding leases.
+
+6.2 Verified Failure Modes & Mitigation Mechanisms
+--------------------------------------------------------------------------------
+Forensic review of verified failure modes:
+
+  1. Split-Brain Worker Leases during Network Partition:
+     - Hazard: A worker loses connectivity to MongoDB while uploading a large file
+       to Telegram. The lease expires, and a second worker reclaims the job.
+     - Mitigation: Before posting to FLOG, the worker checks lease validity. If the
+       file was already stored by the second worker, the first worker detects the
+       existing FLOG ID and discards the duplicate upload.
+
+  2. FloodWait Storms on Telegram Storage Channels:
+     - Hazard: High-velocity concurrent uploads trigger Telegram MTProto 420 FloodWait.
+     - Mitigation: `AuditTaskManager` limits channel card concurrency to 10. Storage
+     workers catch FloodWait, enter temporary cooldown, and failover work across
+     other clients in `multi_clients`. Circuit breakers remain CLOSED.
+
+  3. Stale Callback Query Execution (MessageIdInvalid):
+     - Hazard: Admin interacts with an old dashboard message after another admin
+       triggered changes or deleted the panel.
+     - Mitigation: `_safe_edit_admin_message()` catches `MessageIdInvalid`, falls back
+       to editing the tracked active message, or deploys a replacement panel.
+
+  4. Memory Saturation from Large User Broadcasts:
+     - Hazard: Iterating through hundreds of thousands of users causes memory bloat.
+     - Mitigation: `/broadcast` streams IDs using an unbuffered MongoDB cursor with
+       projection `{"id": 1}`, keeping memory usage constant.
+
+  5. Malicious Path Traversal & Crawler Probing:
+     - Hazard: Automated crawlers flood server with directory traversal probes.
+     - Mitigation: `is_suspicious_path()` intercepts known probe paths, `IPRateLimiter`
+       throttles repeat offenders, and `sanitize_download_path()` neutralizes `../` vectors.
+
+6.3 Comprehensive Gap Analysis & Production Hardening Recommendations
+--------------------------------------------------------------------------------
+While the system is robust and production-certified, this forensic audit identifies
+key architectural opportunities for ongoing operational hardening:
+
+  1. Granular Role-Based Access Control (RBAC):
+     Currently, authorization is binary (Owner vs Admin in `ADMIN_IDS`). Introducing
+     fine-grained permission scopes (e.g., `LOG_VIEWER`, `MODERATOR`, `SUPPORT`)
+     would allow secondary operators to view logs and handle NSFW reports without
+     granting access to server configuration toggles.
+
+  2. Asynchronous Webhook Alert Dispatching:
+     `AlertManager` currently routes operational alerts to Python loggers and in-memory
+     queues. Implementing outbound webhooks (to Slack, Discord, or an external PagerDuty
+     endpoint) would provide immediate off-band incident response notifications.
+
+  3. Distributed Rate Limiting for Broadcast Operations:
+     While `/broadcast` incorporates FloodWait backoff, introducing a configurable
+     per-second token bucket (e.g., 25 msgs/sec) would proactively prevent hitting
+     Telegram rate limits.
+
+  4. Audit Log Archival Policy:
+     `audit_events` in MongoDB grow monotonically. Adding a TTL index or scheduled
+     archival task to prune events older than 90 days would prevent long-term database
+     bloat.
+
+  5. Authenticated Prometheus Metrics Endpoint:
+     The `/metrics` endpoint is currently open for scraping. Implementing basic auth
+     or bearer token validation would secure infrastructure telemetry from unauthorized
+     inspection.
+
+6.4 Production Verification Test Inventory (408 Passing Tests)
+--------------------------------------------------------------------------------
+The full test suite guarantees zero regressions across admin, streaming, and queueing:
+
+  1. tests/test_hls_streaming.py (23 Tests - Validating v6.1.0 HLS, Hardening, Virtual Faststart, VOD Virtualization & In-Memory Cache):
+     - `test_mp4_box_parser`: ISO/IEC 14496-12 top-level box discovery (ftyp, moov, mdat).
+     - `test_mp4_tail_moov_detection`: Tail moov detection (is_tail=True) vs front moov.
+     - `test_mp4_stco_chunk_offset_patching`: In-place 32-bit stco offset adjustment.
+     - `test_mp4_co64_chunk_offset_patching`: In-place 64-bit co64 offset adjustment.
+     - `test_mp4_metadata_manager_range_caching`: Instant cache hit vs disk fallback.
+     - `test_hls_master_playlist_generation`: Multi-variant quality ladder formatting (1080p, 720p, 480p).
+     - `test_hls_media_playlist_and_segments`: Dynamic index.m3u8 generation and .ts segment delivery.
+     - `test_hls_security_token_validation`: Verification of stream token, expiration, and page session cookie.
+     - `test_hls_job_cancellation`: Process termination and feeder task cleanup on client abort.
+     - `test_thumbnail_vtt_formatting`: WebVTT timestamp and sprite coordinate #xywh formatting.
+     - `test_thumbnail_service_generation`: WebP mosaic generation and file serving.
+     - `test_stream_routes_hls_and_thumbnails`: End-to-end route integration across /hls/ and /thumbnails/.
+     - `test_media_streamer_fast_scrub_integration`: HTTP 206 instant cached-range satisfaction without MTProto delay.
+     - `test_fetch_tail_bytes_1024_byte_alignment`: Strict MTProto 1024-byte boundary alignment preventing 400 OFFSET_INVALID.
+     - `test_custom_dl_fetch_chunk_alignment`: ByteStreamer chunk offset and limit alignment <= 1MB.
+     - `test_custom_dl_media_session_reuse`: Global session cache re-use avoiding FloodWait on ExportAuthorization.
+     - `test_thumbnail_vtt_fallback_empty_vtt`: Non-blocking 200 OK empty WebVTT placeholder preventing 404 client errors.
+     - `test_virtual_faststart_range_stream`: In-memory byte-range mapping and sequential MTProto chunk translation for virtual faststart streams.
+     - `test_get_stream_token_handler_native_playable`: Checks container codec / mime compatibility and returns `is_native_playable` flag.
+     - `test_media_streamer_virtual_faststart_initial_range`: End-to-end HTTP 206 virtual faststart prefix injection (`ftyp` + `patched_moov`) without disk or MTProto round-trips.
+     - `test_hls_vod_playlist_virtualization`: Upfront VOD playlist generation with `#EXT-X-PLAYLIST-TYPE:VOD` and `#EXT-X-ENDLIST`.
+     - `test_stream_cache_memory_ring_buffer`: In-memory LRU chunk cache ring-buffer with 0ms RAM retrieval before NVMe/SSD.
+     - `test_internal_stream_route_security`: Rejects external IP access and permits loopback range requests for FFmpeg extraction.
+
+  2. Complete Test Suite Inventory (408 Passing Tests | 100% Pass Rate):
+     - `tests/test_hls_streaming.py`: 23 tests (HLS ABR, VOD Virtualization, MP4 fast scrub, Virtual Faststart, WebP sprites, MTProto alignment, RAM Cache)
+     - `tests/test_v6_invariants_chaos.py`: 34 tests (Storage engine invariants A-O under chaos)
+     - `tests/test_persistent_storage_queue.py`: 33 tests (Queue leases, heartbeats, dead-letter)
+     - `tests/test_storage_worker_architecture.py`: 16 tests (Worker lifecycle, isolation, failover)
+     - `tests/test_storage_media_scoping_circuit_breaker.py`: 10 tests (Circuit breaker states & triggers)
+     - `tests/test_production_hardening.py`: 16 tests (Rate limiting, load shedding, security)
+     - `tests/test_v4_v5_production_systems.py`: 19 tests (Token service, session auth, metrics)
+     - `tests/test_admin_logs.py`: 33 tests (Admin audit, redaction, log categories)
+     - `tests/test_bot_commands.py`: 13 tests (Command syntax, auth filters, menus)
+     - `tests/test_folder_mode.py`: 151 tests (Batching, pagination, folder lifecycle)
+     - `tests/test_folder_files_listing_regression.py`: 19 tests (Folder file listing consistency)
+     - `tests/test_storage_folder_regression.py`: 10 tests (Storage-folder interaction regressions)
+     - `tests/test_multi_file_multi_bot_storage.py`: 18 tests (Multi-client worker mesh balance)
+     - `tests/test_worker_message_isolation.py`: 13 tests (Client 0 vs storage worker message scoping)
+
+================================================================================
+END OF ANALYSIS — SYSTEM FULLY CERTIFIED FOR PRODUCTION OPERATION
+================================================================================

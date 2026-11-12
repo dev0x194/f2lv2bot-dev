@@ -1,0 +1,285 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, Menlo, Monaco, Consolas, monospace;
+
+  --color-brand-bg: #000000;
+  --color-brand-card: #09090b;
+  --color-brand-elevated: #121215;
+  --color-brand-hover: #18181b;
+  --color-brand-active: #27272a;
+  
+  --color-brand-border: rgba(255, 255, 255, 0.1);
+  --color-brand-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-brand-border-strong: rgba(255, 255, 255, 0.18);
+  
+  --color-brand-text: #ededed;
+  --color-brand-muted: #a1a1aa;
+  --color-brand-subtle: #71717a;
+}
+
+/* ==========================================================================
+   Base Layer & Typography
+   ========================================================================== */
+@layer base {
+  html, body {
+    background-color: #000000;
+    color: #ededed;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* Accessible Focus Rings */
+  *:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+  }
+
+  /* Respect Reduced Motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  img, svg, video, iframe {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* ==========================================================================
+   Responsive Shell & Container Gutters
+   ========================================================================== */
+.fs-shell {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.fs-container {
+  width: 100%;
+  max-width: 1140px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .fs-container {
+    width: calc(100% - 24px);
+  }
+}
+
+@media (min-width: 641px) {
+  .fs-container {
+    width: calc(100% - 48px);
+  }
+}
+
+/* Header Overflow Protection */
+.fs-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fs-header-join-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.fs-join-label-short {
+  display: none;
+}
+
+.fs-join-label-full {
+  display: inline;
+}
+
+@media (max-width: 480px) {
+  .fs-join-label-full {
+    display: none;
+  }
+  .fs-join-label-short {
+    display: inline;
+  }
+}
+
+/* ==========================================================================
+   Motion System & Transitions
+   ========================================================================== */
+@keyframes fs-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fs-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes fs-pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.animate-fade-in {
+  animation: fs-fade-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: fs-slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Background Subtle Grid & Vignette */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+.bg-radial-vignette {
+  background: radial-gradient(circle 800px at 50% -100px, rgba(120, 119, 198, 0.12), transparent 70%);
+}
+
+/* ==========================================================================
+   Component System
+   ========================================================================== */
+.fs-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background-color: #09090b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.fs-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Minimum 44px Touch Targets */
+.fs-btn-primary {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background-color: #ffffff;
+  color: #000000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.18);
+  user-select: none;
+}
+
+.fs-btn-primary:hover {
+  background-color: #e4e4e7;
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.3);
+}
+
+.fs-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.fs-btn-secondary {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #ededed;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.fs-btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.fs-btn-secondary:active {
+  transform: scale(0.98);
+}
+
+/* Toast Container */
+.fs-toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.fs-toast {
+  pointer-events: auto;
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background-color: #09090b;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #ededed;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: fs-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.fs-toast.hide {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: all 0.2s ease;
+}
+
+/* Ad Slot Container Clamping */
+.ad-slot-wrapper {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 12px 0;
+}
+.ad-slot-wrapper iframe,
+.ad-slot-wrapper .ad-slot,
+.ad-slot-wrapper .ad-slot-inner,
+.fs-ad-card iframe {
+  max-width: 100% !important;
+}
+
+.fs-ad-card.ad-card-collapsed {
+  display: none !important;
+}

@@ -1,0 +1,73 @@
+/**
+ * File To Link V2 — Unified Design System Tokens
+ * Pitch Black, Deep Zinc Surfaces, Subtle 1px Borders, Geist & Inter Typography
+ */
+
+:root {
+  --fs-bg: #000000;
+  --fs-bg-subtle: #09090b;
+  --fs-bg-elevated: #121215;
+
+  --fs-surface: rgba(9, 9, 11, 0.85);
+  --fs-surface-solid: #09090b;
+  --fs-surface-hover: #18181b;
+  --fs-surface-active: #27272a;
+  --fs-surface-card: #09090b;
+  --fs-surface-overlay: rgba(0, 0, 0, 0.88);
+
+  --fs-border: rgba(255, 255, 255, 0.1);
+  --fs-border-subtle: rgba(255, 255, 255, 0.05);
+  --fs-border-strong: rgba(255, 255, 255, 0.18);
+  --fs-border-focus: #ffffff;
+
+  --fs-text: #ededed;
+  --fs-text-muted: #a1a1aa;
+  --fs-text-subtle: #71717a;
+  --fs-text-inverse: #000000;
+
+  --fs-primary: #ffffff;
+  --fs-primary-light: #ffffff;
+  --fs-primary-dark: #e4e4e7;
+  --fs-primary-glow: rgba(255, 255, 255, 0.1);
+
+  --fs-accent-cyan: #38bdf8;
+  --fs-accent-purple: #a855f7;
+  --fs-accent-emerald: #10b981;
+
+  --fs-font-sans: 'Geist', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --fs-font-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, Menlo, Monaco, Consolas, monospace;
+
+  --fs-radius-sm: 6px;
+  --fs-radius-md: 8px;
+  --fs-radius-lg: 12px;
+  --fs-radius-xl: 16px;
+  --fs-radius-full: 9999px;
+
+  --fs-transition-fast: 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  --fs-transition-base: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="light"], html:not(.dark) {
+  --fs-bg: #fcfcfc;
+  --fs-bg-subtle: #f4f4f5;
+  --fs-bg-elevated: #ffffff;
+
+  --fs-surface: rgba(255, 255, 255, 0.9);
+  --fs-surface-solid: #ffffff;
+  --fs-surface-hover: #f4f4f5;
+  --fs-surface-active: #e4e4e7;
+  --fs-surface-card: #ffffff;
+
+  --fs-border: rgba(0, 0, 0, 0.08);
+  --fs-border-subtle: rgba(0, 0, 0, 0.04);
+  --fs-border-strong: rgba(0, 0, 0, 0.15);
+
+  --fs-text: #09090b;
+  --fs-text-muted: #52525b;
+  --fs-text-subtle: #71717a;
+  --fs-text-inverse: #ffffff;
+
+  --fs-primary: #000000;
+  --fs-primary-light: #18181b;
+  --fs-primary-dark: #000000;
+}

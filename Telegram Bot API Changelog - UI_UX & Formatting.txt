@@ -1,0 +1,272 @@
+================================================================================
+       TELEGRAM BOT API CHANGELOG: [UI/UX] & [MESSAGES & FORMATTING]
+================================================================================
+
+SCOPE OF THIS FILE:
+- [UI/UX]                 : Buttons, inline & reply keyboards, styles, menus,
+                            theme colors, link preview controls, reaction controls
+- [Messages & Formatting] : Rich messages, drafts & streaming, markdown/HTML,
+                            entities, spoilers, quote replies, ephemeral messages
+
+================================================================================
+                                     2026
+================================================================================
+
+--------------------------------------------------------------------------------
+August 24, 2026 — Bot API 10.3
+--------------------------------------------------------------------------------
+[Messages & Formatting] Added RichMessageButton representing a button in a RichMessage.
+[Messages & Formatting] Added RichTextButton.
+[Messages & Formatting] Added RichBlockButtons and InputRichBlockButtons.
+[UI/UX]                 Added field is_compact to RichBlockTable and InputRichBlockTable.
+[UI/UX]                 Added RichBlockExpandableBlockQuotation and InputRichBlockExpandableBlockQuotation for collapsible block quotations.
+[Messages & Formatting] Added EphemeralMessageParameters; replaced receiver_user_id and callback_query_id across sendMessage and media methods with ephemeral_message_parameters.
+[Messages & Formatting] Added parameter ephemeral_message_parameters to sendRichMessage.
+[UI/UX]                 Added replace_callback_query_message to EphemeralMessageParameters to display ephemeral messages in place of original messages.
+[UI/UX]                 Added parameter show_caption_above_media to editEphemeralMessageCaption.
+[Messages & Formatting] Added parameter rich_message to editEphemeralMessageText.
+[UI/UX]                 Added DisabledButton and field disabled to InlineKeyboardButton.
+[UI/UX]                 Added field force_reply to InlineKeyboardMarkup and ReplyKeyboardMarkup.
+[Messages & Formatting] Added parameters can_stop and keep_on_stop to sendMessageDraft and sendRichMessageDraft.
+[Messages & Formatting] Added updates for user stopping message generation (MessageGenerationStopped, Update.stopped_message_generation).
+
+--------------------------------------------------------------------------------
+July 14, 2026 — Bot API 10.2
+--------------------------------------------------------------------------------
+[Messages & Formatting] Added InputRichMessageMedia and field media to InputRichMessage for explicit media formatting.
+[UI/UX]                 Added InputRichBlockListItem for items in rich message lists.
+[UI/UX]                 Added formatting block components: Paragraph, SectionHeading, Preformatted, Footer, Divider, MathematicalExpression, Anchor, List, BlockQuotation, PullQuotation, Collage, Slideshow, Table, Details, Map, Animation, Audio, Photo, Video, VoiceNote, Thinking.
+[Messages & Formatting] Added field blocks to InputRichMessage to format messages using block entities.
+[Messages & Formatting] Introduced Ephemeral Messages (visible only to specified user and bot) for group interactions.
+[Messages & Formatting] Added field is_ephemeral to BotCommand.
+[Messages & Formatting] Added receiver_user and ephemeral_message_id to Message.
+[Messages & Formatting] Added receiver_user_id and callback_query_id to all send methods.
+[Messages & Formatting] Added ephemeral_message_id to ReplyParameters; made message_id optional if ephemeral_message_id is present.
+[Messages & Formatting] Added editEphemeralMessageText, editEphemeralMessageMedia, editEphemeralMessageCaption, editEphemeralMessageReplyMarkup, and deleteEphemeralMessage.
+
+--------------------------------------------------------------------------------
+June 11, 2026 — Bot API 10.1
+--------------------------------------------------------------------------------
+[Messages & Formatting] Introduced Rich Messages for highly structured text and AI stream replies.
+[Messages & Formatting] Added RichText formatting classes: Bold, Italic, Underline, Strikethrough, Spoiler, DateTime, TextMention, Subscript, Superscript, Marked, Code, CustomEmoji, MathematicalExpression, Url, EmailAddress, PhoneNumber, BankCardNumber, Mention, Hashtag, Cashtag, BotCommand, Anchor, AnchorLink, Reference, ReferenceLink.
+[UI/UX]                 Added RichBlock formatting components (Caption, TableCell, ListItem, Paragraph, Heading, Preformatted, Footer, Divider, Math, Anchor, List, Blockquote, Pullquote, Collage, Slideshow, Table, Details, Map, Media blocks, Thinking).
+[Messages & Formatting] Added sendRichMessage, sendRichMessageDraft (streaming), and rich_message parameter to editMessageText.
+
+--------------------------------------------------------------------------------
+May 8, 2026 — Bot API 10.0
+--------------------------------------------------------------------------------
+[UI/UX]                 Added deleteAllMessageReactions and deleteMessageReaction.
+[Messages & Formatting] Allowed bots to pass empty text in sendMessageDraft.
+
+--------------------------------------------------------------------------------
+April 3, 2026 — Bot API 9.6
+--------------------------------------------------------------------------------
+[Messages & Formatting] Allowed date_time entities in checklists, TextQuote, ReplyParameters quote, and gifts.
+
+--------------------------------------------------------------------------------
+March 1, 2026 — Bot API 9.5
+--------------------------------------------------------------------------------
+[Messages & Formatting] Added date_time MessageEntity type for displaying localized date/time.
+[Messages & Formatting] Allowed all bots to use sendMessageDraft.
+
+--------------------------------------------------------------------------------
+February 9, 2026 — Bot API 9.4
+--------------------------------------------------------------------------------
+[UI/UX]                 Allowed bots with Premium owners to send custom emoji directly to chats.
+[UI/UX]                 Added icon_custom_emoji_id and style (colors) to KeyboardButton and InlineKeyboardButton.
+[UI/UX]                 Added setMyProfilePhoto and removeMyProfilePhoto for bot profile pictures.
+
+================================================================================
+                                     2025
+================================================================================
+
+--------------------------------------------------------------------------------
+December 31, 2025 — Bot API 9.3
+--------------------------------------------------------------------------------
+[Messages & Formatting] Added sendMessageDraft for streaming real-time generated replies.
+[UI/UX]                 Allowed bots to disable main username if alternative Fragment usernames exist.
+[Messages & Formatting] Added message_effect_id to forwardMessage and copyMessage.
+
+--------------------------------------------------------------------------------
+February 12, 2025 — Bot API 8.3
+--------------------------------------------------------------------------------
+[UI/UX]                 Allowed reactions on service messages.
+
+--------------------------------------------------------------------------------
+January 1, 2025 — Bot API 8.2
+--------------------------------------------------------------------------------
+[UI/UX]                 Removed hide_url from InlineQueryResultArticle.
+
+================================================================================
+                                     2024
+================================================================================
+
+--------------------------------------------------------------------------------
+October 31, 2024 — Bot API 7.11
+--------------------------------------------------------------------------------
+[UI/UX]                 Added CopyTextButton for inline buttons that copy arbitrary text to clipboard.
+[Messages & Formatting] Supported chat-specific hashtag and cashtag entities.
+
+--------------------------------------------------------------------------------
+August 14, 2024 — Bot API 7.9
+--------------------------------------------------------------------------------
+[UI/UX]                 Added Paid Reactions (ReactionTypePaid).
+
+--------------------------------------------------------------------------------
+May 28, 2024 — Bot API 7.4
+--------------------------------------------------------------------------------
+[UI/UX]                 Added message effects (message_effect_id in sendMessage, etc.).
+[UI/UX]                 Added show_caption_above_media parameter across all media methods.
+[Messages & Formatting] Added expandable_blockquote entity parsing across MarkdownV2 and HTML.
+
+--------------------------------------------------------------------------------
+May 6, 2024 — Bot API 7.3
+--------------------------------------------------------------------------------
+[UI/UX]                 Added ChatBackground objects and chat_background_set service messages.
+
+--------------------------------------------------------------------------------
+March 31, 2024 — Bot API 7.2
+--------------------------------------------------------------------------------
+[UI/UX]                 Enhanced request chat/user buttons (request_name, request_username, request_photo).
+
+================================================================================
+                                     2023
+================================================================================
+
+--------------------------------------------------------------------------------
+December 29, 2023 — Bot API 7.0
+--------------------------------------------------------------------------------
+[UI/UX]                 Reactions API: setMessageReaction, MessageReactionUpdated, MessageReactionCountUpdated.
+[Messages & Formatting] Replies 2.0: cross-chat replies (ExternalReplyInfo) and text quoting (TextQuote).
+[UI/UX]                 Link Preview Customization: LinkPreviewOptions, positioning preview above text, custom size.
+[Messages & Formatting] Block Quotations: blockquote message entities.
+[Messages & Formatting] Batch message deletion, copying, and forwarding (deleteMessages, forwardMessages, copyMessages).
+[UI/UX]                 Request multiple users via KeyboardButtonRequestUsers.
+
+--------------------------------------------------------------------------------
+April 21, 2023 — Bot API 6.7
+--------------------------------------------------------------------------------
+[UI/UX]                 Added switch_inline_query_chosen_chat inline button.
+[UI/UX]                 Multilingual bot names: setMyName and getMyName.
+[UI/UX]                 Custom emoji entities supported for bots with Fragment collectible usernames.
+
+--------------------------------------------------------------------------------
+March 9, 2023 — Bot API 6.6
+--------------------------------------------------------------------------------
+[UI/UX]                 Multilingual bot descriptions (setMyDescription, setMyShortDescription).
+
+--------------------------------------------------------------------------------
+February 3, 2023 — Bot API 6.5
+--------------------------------------------------------------------------------
+[UI/UX]                 Chat and user selection buttons: KeyboardButtonRequestUser, KeyboardButtonRequestChat.
+
+================================================================================
+                                     2022
+================================================================================
+
+--------------------------------------------------------------------------------
+December 30, 2022 — Bot API 6.4
+--------------------------------------------------------------------------------
+[UI/UX]                 Added is_persistent to ReplyKeyboardMarkup.
+
+--------------------------------------------------------------------------------
+August 12, 2022 — Bot API 6.2
+--------------------------------------------------------------------------------
+[UI/UX]                 Custom Emoji support in messages (custom_emoji MessageEntity).
+
+--------------------------------------------------------------------------------
+April 16, 2022 — Bot API 6.0
+--------------------------------------------------------------------------------
+[UI/UX]                 Customizable Menu Button (MenuButton, setChatMenuButton).
+
+================================================================================
+                                     2021
+================================================================================
+
+--------------------------------------------------------------------------------
+December 30, 2021 — Bot API 5.6
+--------------------------------------------------------------------------------
+[Messages & Formatting] Spoiler entities support in text, HTML, and MarkdownV2 formatting.
+
+--------------------------------------------------------------------------------
+December 7, 2021 — Bot API 5.5
+--------------------------------------------------------------------------------
+[UI/UX]                 Mentioning users by numeric ID in inline keyboards.
+
+--------------------------------------------------------------------------------
+June 25, 2021 — Bot API 5.3
+--------------------------------------------------------------------------------
+[UI/UX]                 Personalized Bot Commands by language/chat scope (BotCommandScope, setMyCommands).
+[UI/UX]                 Custom input field placeholders in ReplyKeyboardMarkup and ForceReply.
+
+================================================================================
+                                     2020
+================================================================================
+
+--------------------------------------------------------------------------------
+November 4, 2020 — Bot API 5.0
+--------------------------------------------------------------------------------
+[Messages & Formatting] Pinned messages in private chats and copyMessage method.
+[Messages & Formatting] Manual specification of text entities instead of parse_mode across send and edit methods.
+
+--------------------------------------------------------------------------------
+June 4, 2020 — Bot API 4.9
+--------------------------------------------------------------------------------
+[Messages & Formatting] Added via_bot field to Message to indicate inline sender bot.
+
+--------------------------------------------------------------------------------
+March 30, 2020 — Bot API 4.7
+--------------------------------------------------------------------------------
+[UI/UX]                 Dynamically manage bot commands list via setMyCommands and getMyCommands.
+
+--------------------------------------------------------------------------------
+January 23, 2020 — Bot API 4.6
+--------------------------------------------------------------------------------
+[Messages & Formatting] Added optional field language to MessageEntity.
+
+================================================================================
+                                     2019
+================================================================================
+
+--------------------------------------------------------------------------------
+December 31, 2019 — Bot API 4.5
+--------------------------------------------------------------------------------
+[Messages & Formatting] Underline and strikethrough message entities; nested entities support.
+[Messages & Formatting] Introduced MarkdownV2 parse mode.
+
+--------------------------------------------------------------------------------
+May 31, 2019 — Bot API 4.3
+--------------------------------------------------------------------------------
+[UI/UX]                 Seamless Telegram Login buttons (LoginUrl) in inline keyboards.
+[UI/UX]                 Preservation of inline keyboards in forwarded messages.
+
+--------------------------------------------------------------------------------
+April 14, 2019 — Bot API 4.2
+--------------------------------------------------------------------------------
+[Messages & Formatting] Deleting private chat bot messages within 48 hours via deleteMessage.
+
+================================================================================
+                                  2015 – 2018
+================================================================================
+
+--------------------------------------------------------------------------------
+2018
+--------------------------------------------------------------------------------
+[Messages & Formatting] Formatted text (Markdown & HTML) in media captions (Bot API 3.6).
+[Messages & Formatting] Added cashtag and phone_number MessageEntity types (Bot API 4.0).
+[UI/UX]                 Support for tg:// URLs in inline keyboard buttons and text_link entities (Bot API 4.0).
+
+--------------------------------------------------------------------------------
+2016
+--------------------------------------------------------------------------------
+[UI/UX]                 Inline Keyboards with callback buttons and message editing (Bot API 2.0).
+[UI/UX]                 Inline Mode launch for querying bots anywhere (Bot API 2.0).
+[Messages & Formatting] Message editing methods (editMessageText, editMessageCaption, editMessageReplyMarkup) (Bot API 2.0).
+[Messages & Formatting] Native HTML and Markdown formatting parse modes launched (January 20, 2016).
+[Messages & Formatting] Added disable_notification parameter to all send methods (February 20, 2016).
+
+--------------------------------------------------------------------------------
+2015
+--------------------------------------------------------------------------------
+[Messages & Formatting] Initial Markdown formatting support via parse_mode in sendMessage (September 7, 2015).
+================================================================================

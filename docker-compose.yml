@@ -1,0 +1,62 @@
+services:
+  filestreambot:
+    build:
+      context: .
+    image: ${FILESTREAM_IMAGE:-filestreambot:local}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PORT: ${PORT:-8080}
+      BIND_ADDRESS: 0.0.0.0
+      HAS_SSL: ${FILESTREAM_HAS_SSL:-True}
+      NO_PORT: ${FILESTREAM_NO_PORT:-True}
+      FQDN: ${FQDN:?Set FQDN in .env}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-filestreambot-proxy}"
+      - >-
+        traefik.http.routers.filestreambot.rule=Host(`${FQDN:?Set FQDN in .env}`${MULTI_TOKEN1_FQDN:+,`${MULTI_TOKEN1_FQDN}`}${MULTI_TOKEN2_FQDN:+,`${MULTI_TOKEN2_FQDN}`}${MULTI_TOKEN3_FQDN:+,`${MULTI_TOKEN3_FQDN}`}${MULTI_TOKEN4_FQDN:+,`${MULTI_TOKEN4_FQDN}`}${MULTI_TOKEN5_FQDN:+,`${MULTI_TOKEN5_FQDN}`}${MULTI_TOKEN6_FQDN:+,`${MULTI_TOKEN6_FQDN}`}${MULTI_TOKEN7_FQDN:+,`${MULTI_TOKEN7_FQDN}`}${MULTI_TOKEN8_FQDN:+,`${MULTI_TOKEN8_FQDN}`}${MULTI_TOKEN9_FQDN:+,`${MULTI_TOKEN9_FQDN}`}${MULTI_TOKEN10_FQDN:+,`${MULTI_TOKEN10_FQDN}`}${MULTI_TOKEN11_FQDN:+,`${MULTI_TOKEN11_FQDN}`}${MULTI_TOKEN12_FQDN:+,`${MULTI_TOKEN12_FQDN}`}${MULTI_TOKEN13_FQDN:+,`${MULTI_TOKEN13_FQDN}`}${MULTI_TOKEN14_FQDN:+,`${MULTI_TOKEN14_FQDN}`}${MULTI_TOKEN15_FQDN:+,`${MULTI_TOKEN15_FQDN}`}${MULTI_TOKEN16_FQDN:+,`${MULTI_TOKEN16_FQDN}`}${MULTI_TOKEN17_FQDN:+,`${MULTI_TOKEN17_FQDN}`}${MULTI_TOKEN18_FQDN:+,`${MULTI_TOKEN18_FQDN}`}${MULTI_TOKEN19_FQDN:+,`${MULTI_TOKEN19_FQDN}`}${MULTI_TOKEN20_FQDN:+,`${MULTI_TOKEN20_FQDN}`})
+      - "traefik.http.routers.filestreambot.entrypoints=websecure"
+      - "traefik.http.routers.filestreambot.tls=true"
+      - "traefik.http.routers.filestreambot.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.services.filestreambot.loadbalancer.server.port=${PORT:-8080}"
+    volumes:
+      - filestream-cache:${STREAM_CACHE_DIR:-/tmp/filestream_stream_cache}
+    networks:
+      - proxy
+
+  traefik:
+    image: traefik:v3
+    restart: unless-stopped
+    command:
+      - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.${TRAEFIK_CERT_RESOLVER:-letsencrypt}.acme.email=${ACME_EMAIL:?Set ACME_EMAIL in .env}"
+      - "--certificatesresolvers.${TRAEFIK_CERT_RESOLVER:-letsencrypt}.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.${TRAEFIK_CERT_RESOLVER:-letsencrypt}.acme.httpchallenge=true"
+      - "--certificatesresolvers.${TRAEFIK_CERT_RESOLVER:-letsencrypt}.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  proxy:
+    name: ${TRAEFIK_NETWORK:-filestreambot-proxy}
+
+volumes:
+  filestream-cache:
+  letsencrypt:

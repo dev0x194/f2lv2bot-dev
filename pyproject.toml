@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "filestreambot"
+version = "2.0.0"
+description = "A Telegram bot to stream files directly to web with high-performance async architecture"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "dev0x194" }
+]
+dependencies = [
+    "aiohttp>=3.9.0",
+    "pyrofork>=2.3.69",
+    "python-dotenv>=1.0.0",
+    "motor>=3.3.0",
+    "aiofiles>=23.2.0",
+    "dnspython>=2.5.0",
+    "requests>=2.31.0",
+    "jinja2>=3.1.2",
+    "cloudscraper>=1.2.71",
+    "psutil>=5.9.0",
+    "speedtest-cli>=2.1.3",
+    "pyaes>=1.6.1",
+]
+
+[project.optional-dependencies]
+crypto = [
+    "tgcrypto>=1.2.5",
+]
+nsfw = [
+    "nudenet>=3.0.0",
+    "opencv-python-headless>=4.8.0",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+all = [
+    "tgcrypto>=1.2.5",
+    "nudenet>=3.0.0",
+    "opencv-python-headless>=4.8.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["FileStream*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
