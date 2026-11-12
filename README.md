@@ -12,7 +12,7 @@ A powerful, high-performance Telegram bot that streams files directly from Teleg
     <a href="https://github.com/Avipatilpro/FileStreamBot/issues">Request Feature</a>
 </p>
 
-## ✨ Features
+## ✨ Features cc
 
 - **Stream Instantly:** Stream directly from Telegram, with optional local hot-chunk caching for repeat downloads.
 - **Multi-Client Support:** Add multiple bot sessions to handle heavy traffic and bypass limits.
