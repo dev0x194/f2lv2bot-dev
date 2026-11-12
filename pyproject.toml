@@ -1,3 +1,4 @@
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -63,3 +64,6 @@ python_functions = ["test_*"]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[tool.vercel]
+entrypoint = "FileStream.main:app"
