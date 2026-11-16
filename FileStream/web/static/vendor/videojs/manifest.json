@@ -1,0 +1,22 @@
+{
+  "version": "8.24.2",
+  "license": "Apache-2.0",
+  "files": {
+    "video.min.js": {
+      "url": "https://unpkg.com/video.js@8.24.2/dist/video.min.js",
+      "sha256": "8723f5804455c25e77097055ecc6bf98933015f072ae0c9f387a86ece1e84088"
+    },
+    "video-js.min.css": {
+      "url": "https://unpkg.com/video.js@8.24.2/dist/video-js.min.css",
+      "sha256": "076c48366e8a186bf243d5937f32a97410045612629b6fdbabc389abb6ce5cb9"
+    },
+    "LICENSE": {
+      "url": "https://unpkg.com/video.js@8.24.2/LICENSE",
+      "sha256": "25be5c0d5db286add77f5e4d21886800cf38296f50c71fc2d582a2223312b23c"
+    },
+    "LICENSE-2.0.txt": {
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  }
+}

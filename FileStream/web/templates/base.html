@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{{ page_title or title or file_name or bot_name or 'FileStream' }}</title>
+<link rel="icon" href="/favicon.ico">
+<meta name="description" content="{{ meta_description or 'Share, stream and download files with FileStream.' }}">{% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
+<script src="/static/js/theme.js">
+</script>
+<link rel="stylesheet" href="/static/css/app.css">{% block head %}{% endblock %}
+</head>
+<body><noscript><p class="notice">JavaScript is needed for themes and authorized downloads/playback. You can still use the Telegram, legal and privacy links.</p></noscript>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="/" aria-label="{{ bot_name or 'FileStream' }} home">
+<svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+<path d="M5 3h11l7 7v15H5zM16 3v8h7M9 16h10M9 20h7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+</svg>
+<span>{{ bot_name or 'FileStream' }}<small>Files, simply shared</small>
+</span>
+</a>
+<label class="theme">Theme<select id="theme" aria-label="Color theme">
+<option value="system">System</option>
+<option value="light">Light</option>
+<option value="dark">Dark</option>
+</select>
+</label>
+</header>
+{% block topad %}{% endblock %}
+<main id="main" tabindex="-1">{% block content %}{% endblock %}
+</main>
+<footer>
+<span>{{ bot_brand or 'FileStream' }}</span>
+<nav aria-label="Footer">
+<a href="{{ legal_url or '/legal' }}">Terms</a>
+<a href="{{ privacy_url or '/privacy' }}">Privacy</a>{% if bot_join_url %}<a href="{{ bot_join_url }}">Help in Telegram</a>{% endif %}</nav>
+</footer>
+<script src="/static/js/app.js" defer>
+</script>{% block scripts %}{% endblock %}
+</body>
+</html>

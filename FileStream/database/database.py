@@ -1100,11 +1100,6 @@ class Database(StorageJobRepositoryMixin):
         return link, link
 
     async def resolve_public_file(self, public_id: str, *, increment_click: bool = False) -> tuple[dict, dict]:
-        if not increment_click:
-            cached = get_cached_file_reference(public_id)
-            if cached:
-                return cached
-
         link = await self.get_public_link(public_id)
         await self._assert_public_link_active(link)
         if link.get("type") != "file":

@@ -63,7 +63,7 @@ from FileStream.core.runtime.stream_cache import warm_stream_cache
 from FileStream.services.storage_service import storage_service
 from FileStream.core.monitoring.audit_manager import audit_manager
 
-server = web.AppRunner(web_server())
+server = web.AppRunner(web_server(), access_log=None)
 sites = []
 db = Database(Telegram.DATABASE_URL, Telegram.SESSION_NAME)
 

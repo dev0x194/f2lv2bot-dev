@@ -280,11 +280,28 @@ async def privacy_page_handler(request: web.Request):
     return web.Response(text=await render_policy_page("privacy", bot=resolve_request_bot(request.host)), content_type="text/html")
 
 
+async def _resolve_active_legacy_reference(value: str, kind: str):
+    # Legacy redirects may find an existing capability, never mint a replacement
+    # for a revoked/expired link merely because a database ID is known.
+    try:
+        link = await db.get_public_link(value)
+    except FileNotFound:
+        link = None
+    if not link:
+        link = await db.get_active_public_link_for_target(kind, value)
+    if not link:
+        raise FileNotFound
+    public_id = link["public_id"]
+    if kind == "file":
+        return await db.resolve_public_file(public_id)
+    return await db.resolve_public_folder(public_id)
+
+
 @routes.get("/watch/{path}", allow_head=True)
 async def watch_handler(request: web.Request):
     try:
         path = request.match_info["path"]
-        file_info, public_link = await db.resolve_file_reference(path)
+        file_info, public_link = await _resolve_active_legacy_reference(path, "file")
         raise web.HTTPFound(location=build_public_file_url(public_link["public_id"], file_info=file_info))
     except InvalidHash:
         raise web.HTTPForbidden(text=WebMessages.SECURE_LINK_EXPIRED)
@@ -320,7 +337,7 @@ async def gen_handler(request: web.Request):
 async def folder_handler(request: web.Request):
     try:
         folder_id = request.match_info["folder_id"]
-        folder, public_link = await db.resolve_folder_reference(folder_id)
+        folder, public_link = await _resolve_active_legacy_reference(folder_id, "folder")
         raise web.HTTPFound(location=build_public_folder_url(public_link["public_id"], folder=folder))
     except FileNotFound:
         raise web.HTTPNotFound(text="Folder unavailable.\n\nThe folder may have been removed. Please reopen the share page and try again.")
@@ -332,7 +349,7 @@ async def folder_handler(request: web.Request):
 async def folderm_handler(request: web.Request):
     try:
         folder_id = request.match_info["folder_id"]
-        folder, public_link = await db.resolve_folder_reference(folder_id)
+        folder, public_link = await _resolve_active_legacy_reference(folder_id, "folder")
         raise web.HTTPFound(location=build_public_folder_url(public_link["public_id"], folder=folder))
     except FileNotFound:
         raise web.HTTPNotFound(text="Folder unavailable.\n\nThe folder may have been removed. Please reopen the share page and try again.")
@@ -364,22 +381,8 @@ async def gfolder_handler(request: web.Request):
 
 @routes.get("/dl/{path}", allow_head=True)
 async def dl_handler(request: web.Request):
-    try:
-        path = request.match_info["path"]
-        if not _OBJECT_ID_RE.fullmatch(path):
-            raise web.HTTPForbidden(text=WebMessages.SECURE_LINK_EXPIRED)
-        return await media_streamer(request, path)
-    except InvalidHash:
-        raise web.HTTPForbidden(text=WebMessages.SECURE_LINK_EXPIRED)
-    except FileNotFound:
-        raise web.HTTPNotFound(text="File unavailable.\n\nThe file may have been removed. Please reopen the share page and try again.")
-    except (AttributeError, BadStatusLine, ConnectionResetError):
-        raise web.HTTPServiceUnavailable(text="Service Unavailable")
-    except Exception as e:
-        traceback.print_exc()
-        logging.critical(e.with_traceback(None))
-        logging.debug(traceback.format_exc())
-        raise web.HTTPInternalServerError(text=WebMessages.DOWNLOAD_REQUEST_INVALID)
+    # Legacy route remains registered but no longer accepts database IDs as capabilities.
+    raise web.HTTPForbidden(text=WebMessages.SECURE_LINK_EXPIRED)
 
 
 @routes.get("/get-download-token/{path}", allow_head=False)
@@ -388,7 +391,7 @@ async def get_download_token_handler(request: web.Request):
         path = request.match_info["path"]
         if not _validate_page_token(request, path):
             raise web.HTTPForbidden(text=WebMessages.SECURE_LINK_EXPIRED)
-        file_info, _ = await db.resolve_file_reference(path)
+        file_info, public_link = await db.resolve_public_file(path)
         await ensure_flog_media_exists(file_info, bot=FileStream, prune_stale=True, db_instance=db)
         session_id = _current_page_session_id(request)
         token = token_service.create_access_token(
@@ -396,7 +399,7 @@ async def get_download_token_handler(request: web.Request):
             kind="download",
             expires_in_seconds=21600,
             single_use=False,
-            metadata={"session_id": session_id},
+            metadata={"session_id": session_id, "public_id": path},
         )
         base = build_base_url(file_info=file_info).rstrip("/")
         download_url = f"{base}/file/{token}"
@@ -424,7 +427,7 @@ async def get_stream_token_handler(request: web.Request):
         path = request.match_info["path"]
         if not _validate_page_token(request, path):
             raise web.HTTPForbidden(text=WebMessages.SECURE_LINK_EXPIRED)
-        file_info, _ = await db.resolve_file_reference(path)
+        file_info, public_link = await db.resolve_public_file(path)
         await ensure_flog_media_exists(file_info, bot=FileStream, prune_stale=True, db_instance=db)
         session_id = _current_page_session_id(request)
         token = token_service.create_access_token(
@@ -432,7 +435,7 @@ async def get_stream_token_handler(request: web.Request):
             kind="stream",
             expires_in_seconds=1800,
             single_use=False,
-            metadata={"session_id": session_id},
+            metadata={"session_id": session_id, "public_id": path},
         )
         base = build_base_url(file_info=file_info, request=request).rstrip("/")
         file_duration = int(file_info.get("duration") or 0)
@@ -469,14 +472,12 @@ async def get_stream_token_handler(request: web.Request):
             elif "flac" in fn_lower:
                 detected_audio_codec = "FLAC"
 
-        internal_db_id = str(file_info["_id"])
-        direct_dl_id = path or internal_db_id
         thumbnails_url = f"{base}/thumbnails/{token}/thumbnails.vtt" if getattr(Server, "THUMBNAILS_ENABLED", True) else None
         res = web.json_response(
             {
                 "success": True,
                 "stream_url": f"{base}/stream/{token}",
-                "download_url": f"{base}/dl/{direct_dl_id}",
+                "download_token_path": f"/get-download-token/{path}",
                 "thumbnails_url": thumbnails_url,
                 "mime_type": canonical_mime,
                 "file_name": file_name,
@@ -519,6 +520,7 @@ async def file_handler(request: web.Request):
         if token_session_id and (not session_id or session_id != token_session_id):
             raise web.HTTPForbidden(text=WebMessages.DOWNLOAD_EXPIRED)
         
+        await _assert_access_link(payload)
         return await media_streamer(request, str(payload["path"]), force_download=True)
     except web.HTTPForbidden:
         raise
@@ -536,7 +538,7 @@ async def file_handler(request: web.Request):
 @routes.get("/stream/{token}", allow_head=True)
 async def stream_handler(request: web.Request):
     token = request.match_info.get("token", "")
-    redacted_token = f"{token[:6]}...{token[-4:]}" if len(token) > 10 else "***"
+    redacted_token = "[redacted]"
     range_header = request.headers.get("Range", "none")
     client_ip = request.remote or "-"
     logging.info(
@@ -555,6 +557,7 @@ async def stream_handler(request: web.Request):
         if session_id and token_session_id and session_id != token_session_id:
             logging.info("[DIRECT_STREAM_REQUEST] method=%s token=%s status=403 reason=session_mismatch", request.method, redacted_token)
             raise web.HTTPForbidden(text=WebMessages.STREAM_EXPIRED)
+        await _assert_access_link(payload)
         return await media_streamer(request, str(payload["path"]), force_download=False)
     except (asyncio.CancelledError, ConnectionResetError, BrokenPipeError):
         logging.info("[DIRECT_STREAM_DISCONNECT] method=%s token=%s ip=%s client disconnected during streaming", request.method, redacted_token, client_ip)
@@ -568,6 +571,15 @@ async def stream_handler(request: web.Request):
     except (AttributeError, BadStatusLine) as exc:
         logging.warning("[DIRECT_STREAM_ERROR] method=%s token=%s error=%s", request.method, redacted_token, type(exc).__name__)
         raise web.HTTPServiceUnavailable(text="Service Unavailable")
+
+
+async def _assert_access_link(payload: dict) -> None:
+    public_id = (payload.get("metadata") or {}).get("public_id")
+    if not public_id:
+        raise web.HTTPForbidden(text=WebMessages.SECURE_LINK_EXPIRED)
+    file_info, _ = await db.resolve_public_file(public_id)
+    if str(file_info["_id"]) != str(payload["path"]):
+        raise web.HTTPForbidden(text=WebMessages.SECURE_LINK_EXPIRED)
 
 
 def _validate_stream_token(request: web.Request, token: str) -> dict:
@@ -586,6 +598,7 @@ async def thumbnail_vtt_handler(request: web.Request):
     try:
         token = request.match_info["token"]
         payload = _validate_stream_token(request, token)
+        await _assert_access_link(payload)
         db_id = str(payload["path"])
         file_info, _ = await db.resolve_file_reference(db_id)
         internal_db_id = str(file_info["_id"])
@@ -618,7 +631,7 @@ async def thumbnail_vtt_handler(request: web.Request):
             text=vtt_content or "WEBVTT\n\n",
             content_type="text/vtt",
             headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate" if not vtt_content else "public, max-age=86400",
+                "Cache-Control": "no-cache, no-store, must-revalidate" if not vtt_content else "private, no-store",
                 "Access-Control-Allow-Origin": "*",
             },
         )
@@ -634,6 +647,7 @@ async def thumbnail_sprite_handler(request: web.Request):
     try:
         token = request.match_info["token"]
         payload = _validate_stream_token(request, token)
+        await _assert_access_link(payload)
         db_id = str(payload["path"])
         file_info, _ = await db.resolve_file_reference(db_id)
         internal_db_id = str(file_info["_id"])
@@ -647,7 +661,7 @@ async def thumbnail_sprite_handler(request: web.Request):
             body=data,
             content_type="image/webp",
             headers={
-                "Cache-Control": "public, max-age=86400",
+                "Cache-Control": "private, no-store",
                 "Access-Control-Allow-Origin": "*",
             },
         )
@@ -663,7 +677,7 @@ async def thumb_handler(request: web.Request):
     """Extract, disk-cache, and stream native Telegram media thumbnails."""
     try:
         path = request.match_info["path"]
-        file_info, _ = await db.resolve_file_reference(path)
+        file_info, public_link = await db.resolve_public_file(path)
         internal_db_id = str(file_info["_id"])
 
         cache_dir = Path("thumbnails_cache")
@@ -676,7 +690,7 @@ async def thumb_handler(request: web.Request):
                 body=data,
                 content_type="image/jpeg",
                 headers={
-                    "Cache-Control": "public, max-age=86400",
+                    "Cache-Control": "private, no-store",
                     "Access-Control-Allow-Origin": "*",
                 },
             )
@@ -744,7 +758,7 @@ async def thumb_handler(request: web.Request):
                 body=thumb_data,
                 content_type="image/jpeg",
                 headers={
-                    "Cache-Control": "public, max-age=86400",
+                    "Cache-Control": "private, no-store",
                     "Access-Control-Allow-Origin": "*",
                 },
             )
@@ -851,7 +865,7 @@ async def media_streamer(request: web.Request, db_id: str, *, force_download: bo
         raise web.HTTPNotFound(text="File unavailable. Please reopen the share page and try again.")
 
     _tok = request.match_info.get("token", "")
-    _redacted = f"{_tok[:6]}...{_tok[-4:]}" if len(_tok) > 10 else (_tok or "***")
+    _redacted = "[redacted]"
 
     def _unsatisfiable() -> web.Response:
         logging.warning(
@@ -1003,13 +1017,11 @@ async def media_streamer(request: web.Request, db_id: str, *, force_download: bo
         disposition = "attachment"
 
     status_code = 206 if range_header else 200
-    etag = f'"{internal_db_id}-{file_size}"'
     headers = {
         "Content-Type": f"{mime_type}",
         "Content-Length": str(req_length),
         "Content-Disposition": f"{disposition}; filename=\"{file_name}\"; filename*=UTF-8''{encoded_name}",
         "Accept-Ranges": "bytes",
-        "ETag": etag,
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Range, Accept, Origin, Content-Type",
         "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges, Content-Type, ETag, Last-Modified",
@@ -1025,7 +1037,7 @@ async def media_streamer(request: web.Request, db_id: str, *, force_download: bo
         headers["Content-Range"] = f"bytes {from_bytes}-{until_bytes}/{file_size}"
 
     token = request.match_info.get("token", "")
-    redacted_token = f"{token[:6]}...{token[-4:]}" if len(token) > 10 else (token or "***")
+    redacted_token = "[redacted]"
     logging.info(
         "[DIRECT_STREAM_REQUEST] method=%s token=%s range=%s status=%s content_length=%s content_type=%s start=%s end=%s total=%s",
         request.method,

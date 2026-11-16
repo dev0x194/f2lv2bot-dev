@@ -96,6 +96,7 @@ async def process_report(bot: Client, message: Message, target_type: str, target
         except Exception:
             await message.reply_text(ErrorMessages.FILE_NOT_FOUND, quote=True)
             return
+        target_id = str(file_info["_id"])
         uploader_id = file_info.get("user_id")
         uploader_ref = f"<code>{uploader_id}</code>"
         target_label = f"File Ref: <code>{target_id}</code>"
@@ -109,6 +110,7 @@ async def process_report(bot: Client, message: Message, target_type: str, target
         except Exception:
             await message.reply_text(ErrorMessages.FOLDER_NOT_FOUND, quote=True)
             return
+        target_id = str(folder["_id"])
         uploader_id = folder.get("user_id")
         uploader_ref = f"<code>{uploader_id}</code>"
         target_label = f"Folder Ref: <code>{target_id}</code>"

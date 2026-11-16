@@ -505,7 +505,7 @@ class WebAds:
 
     @classmethod
     def enabled_for_bot(cls, bot=None) -> bool:
-        return bool(cls._resolve_attr("ENABLED", bot=bot))
+        return bool(cls.ENABLED) and bool(cls._resolve_attr("ENABLED", bot=bot))
 
     @classmethod
     def _banner_slot(
@@ -533,7 +533,7 @@ class WebAds:
 
     @classmethod
     def template_context(cls, enabled_override: bool | None = None, *, bot=None) -> dict:
-        configured_enabled = bool(cls._resolve_attr("ENABLED", bot=bot))
+        configured_enabled = bool(cls.ENABLED) and bool(cls._resolve_attr("ENABLED", bot=bot))
         enabled_flag = configured_enabled if enabled_override is None else bool(enabled_override) and configured_enabled
         desktop_top = cls._banner_slot(
             "desktop",
@@ -567,6 +567,14 @@ class WebAds:
             cls._resolve_attr("MOBILE_BOTTOM_BANNER_INVOKE_URL", bot=bot),
             enabled_override=enabled_flag,
         )
+
+        # One shared 300x250 unit, initialized for the active viewport only.
+        # Keep both environment names; desktop inline is canonical when configured.
+        shared = desktop_inline if desktop_inline["key"] and desktop_inline["invoke_url"] else mobile_bottom
+        for slot in (desktop_inline, mobile_bottom):
+            slot["key"] = shared["key"]
+            slot["invoke_url"] = shared["invoke_url"]
+            slot["enabled"] = enabled_flag and bool(slot["key"] and slot["invoke_url"])
 
         desktop_social_bar_url = cls._resolve_attr("DESKTOP_SOCIAL_BAR_URL", bot=bot) if enabled_flag else ""
         mobile_social_bar_url = cls._resolve_attr("MOBILE_SOCIAL_BAR_URL", bot=bot) if enabled_flag else ""

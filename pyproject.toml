@@ -67,3 +67,14 @@ filterwarnings = [
 
 [tool.vercel]
 entrypoint = "FileStream.main:app"
+
+[tool.setuptools.package-data]
+FileStream = [
+    "web/templates/*.html",
+    "web/templates/components/*.html",
+    "web/static/css/*.css",
+    "web/static/js/*.js",
+    "web/static/vendor/videojs/*",
+    "web/README.md",
+    "web/tools/*.py",
+]

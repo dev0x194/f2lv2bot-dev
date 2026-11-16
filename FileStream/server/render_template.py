@@ -33,7 +33,10 @@ from FileStream.bot.helpers.legal import (
 from FileStream.server.exceptions import FileNotFound
 
 
-env = jinja2.Environment(autoescape=True)
+env = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "templates")),
+    autoescape=True,
+)
 db = Database(Telegram.DATABASE_URL, Telegram.SESSION_NAME)
 
 
@@ -147,7 +150,7 @@ def _http_media_url(value: str | None) -> str | None:
 async def _template_context(**kwargs):
     web_link_context = kwargs.pop("_web_link_context", {}) or {}
     bot_client = kwargs.pop("_bot_client", None) or FileStream
-    web_ads_enabled = await db.get_web_ads_status(bot=bot_client)
+    web_ads_enabled = bool(WebAds.ENABLED) and await db.get_web_ads_status(bot=bot_client)
     bot_username = get_bot_username(bot_client)
     bot_name = get_bot_name(bot_client)
     return {
@@ -200,8 +203,6 @@ async def render_page(
 
     raw_name = file_data.get("file_name") or "file"
     file_name = raw_name.replace("_", " ")
-    if len(file_name) > 75:
-        file_name = file_name[:75] + "…"
 
     page_bot = resolve_bot_client(file_info=file_data) or FileStream
     share_url = build_public_file_url(public_id, file_info=file_data)
@@ -309,7 +310,8 @@ async def render_page(
             resolution=resolution,
             video_codec=video_codec,
             audio_codec=audio_codec,
-            is_native_playable=bool(ext in {".mp4", ".m4v", ".webm"} or "mp4" in mime_type or "webm" in mime_type),
+            is_native_playable=bool(ext in {".mp4", ".m4v", ".webm", ".mp3", ".m4a", ".ogg", ".wav"}),
+            poster_url=f"/thumb/{public_id}" if is_playable else None,
             thumbnails_enabled=bool(Server.THUMBNAILS_ENABLED),
         )
     )
@@ -344,7 +346,10 @@ async def render_folder(
     files = []
 
     for fid in file_ids:
-        file_data = await db.get_file(fid)
+        try:
+            file_data = await db.get_file(fid)
+        except FileNotFound:
+            continue
         if not file_data:
             continue
         file_public = await db.ensure_public_link_for_file(file_data)
@@ -388,20 +393,10 @@ async def render_folder(
                 "download_id": file_public_id,
                 "stream_token_path": build_public_stream_token_path(file_public_id),
                 "download_token_path": build_public_download_token_path(file_public_id),
-                "page_token": token_service.create_access_token(
-                    file_public_id,
-                    kind="page",
-                    expires_in_seconds=1800,
-                    metadata={"session_id": str(session_id or "").strip()},
-                ),
                 "telegram_url": build_public_bot_open_link(file_public_id, resolve_bot_client(file_info=file_data) or folder_bot),
             }
         )
 
-    if not files:
-        raise FileNotFound
-
-    files.sort(key=_folder_sort_key)
     for item in files:
         item.pop("_sort_name", None)
 
@@ -545,7 +540,7 @@ async def render_landing_page(*, bot=None) -> str:
     features = [
         {
             "title": "One Clean Share Link",
-            "text": "Generate a single public page for each file instead of exposing raw stream endpoints.",
+            "text": "Give each file its own page, ready to share with a single link.",
         },
         {
             "title": "Watch, Download, Reopen",
@@ -557,7 +552,7 @@ async def render_landing_page(*, bot=None) -> str:
         },
         {
             "title": "Telegram-Powered Delivery",
-            "text": "The platform uses Telegram delivery with secure page-bound web access.",
+            "text": "Send files to the Telegram bot and reopen them in Telegram whenever you need.",
         },
     ]
 
@@ -569,11 +564,13 @@ async def render_landing_page(*, bot=None) -> str:
 
     return template.render(
         **await _template_context(
+            _bot_client=bot_client,
             page_title=title,
             meta_description=description,
             meta_keywords=", ".join(dict.fromkeys(keywords)),
             canonical_url=canonical_url,
             preview_image_url=preview_image_url,
+            schema_data=schema,
             schema_json=json.dumps(schema, ensure_ascii=False, separators=(",", ":")),
             brand_name=brand_name,
             bot_name=bot_name,
