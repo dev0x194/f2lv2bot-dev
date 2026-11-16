@@ -1,13 +1,17 @@
-{% extends 'base.html' %}{% block topad %}{% with placement='top' %}{% include 'components/ads.html' %}{% endwith %}{% endblock %}
-{% block content %}<p class="eyebrow">SHARED FOLDER · {{ count }} FILES</p>
-<h1>{{ page_title }}</h1>
-<p class="lede">Choose a file to view its details, stream or download.</p>{% include 'components/adblock_notice.html' %}<ol class="file-list">{% for file in files %}<li>
-<a href="{{ file.share_url }}" data-folder-file>
-<span class="number">{{ '%02d'|format(loop.index) }}.</span>
-<span class="row-name" title="{{ file.name }}">{{ file.name }}</span>
-<span class="row-size">{{ file.size }}</span>
-<span aria-hidden="true">↗</span>
-</a>
-</li>{% else %}<li class="notice">This folder has no available files. Ask the sender to add files or share a new link.</li>{% endfor %}</ol>
-<nav class="safety" aria-label="Folder support">{% if bot_join_url %}<a href="{{ bot_join_url }}">Open Telegram ↗</a>{% endif %}{% if report_url %}<a href="{{ report_url }}">Report NSFW</a>{% endif %}</nav>{% with placement='inline' %}{% include 'components/ads.html' %}{% endwith %}{% endblock %}
-{% block scripts %}{% with access_page=true %}{% include 'components/ad_scripts.html' %}{% endwith %}{% endblock %}
+{% extends 'base.html' %}{% from 'components/icons.html' import icon %}
+{% block topad %}{% with placement='top' %}{% include 'components/ads.html' %}{% endwith %}{% endblock %}
+{% block content %}
+<div class="page-heading"><span class="icon-box accent-0">{{ icon('folder') }}</span><p class="eyebrow">SHARED FOLDER · {{ count }} FILES</p><h1>{{ page_title }}</h1><p class="lede">Your collection, ready to explore. Choose a file to stream, download or share.</p><button data-share-url="{{ folder_share_url }}">{{ icon('share') }} Share Folder</button></div>
+{% include 'components/adblock_notice.html' %}
+<section aria-label="Browse files" id="folder-browser">
+<div class="folder-toolbar"><label class="search-label">Search files<input id="file-search" type="search" placeholder="Search by filename…" autocomplete="off"></label><button id="clear-search" type="button">Clear search</button><label>Sort by<select id="file-sort"><option value="original">Folder order</option><option value="az">Name A–Z</option><option value="za">Name Z–A</option><option value="large">Size largest first</option><option value="small">Size smallest first</option></select></label></div>
+<div class="filter-chips" role="group" aria-label="File type">{% for key,label in [('all','All'),('video','Videos'),('audio','Audio'),('images','Images'),('documents','Documents'),('archive','Archives'),('other','Other')] %}<button data-filter="{{ key }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ label }}</button>{% endfor %}</div>
+<p id="result-count" class="metadata" role="status">{{ count }} files</p>
+<ol class="file-list file-grid" id="file-grid">{% for file in files %}<li class="file-card" data-file-index="{{ loop.index0 }}"><a href="{{ file.share_url }}" data-folder-file><span class="file-icon icon-box">{{ icon(file.kind) }}</span><span class="number">{{ '%02d'|format(loop.index) }}.</span><span class="row-name" title="{{ file.name }}">{{ file.name }}</span><span class="row-size">{{ file.size }}</span><span class="file-format metadata"></span><span class="card-open" aria-hidden="true">View details ↗</span></a></li>{% else %}<li class="notice">This folder has no available files. Ask the sender to add files or share a new link.</li>{% endfor %}</ol>
+<div id="empty-results" class="empty-state" hidden><h2>No matching files</h2><p>Try another name or choose a different file type.</p><button id="reset-files">Reset search and filters</button></div>
+</section>
+<dialog id="file-details" aria-labelledby="detail-name"><div class="drawer-header"><p class="eyebrow">FILE DETAILS</p><button id="close-details" aria-label="Close file details">✕</button></div><h2 id="detail-name" tabindex="-1"></h2><dl class="detail-metadata" id="detail-metadata"></dl><div class="actions"><a class="button primary" id="detail-play">Open player</a><a class="button" id="detail-download">Download on file page</a><button id="detail-share">Share</button><button id="detail-copy">Copy Link</button><a class="button" id="detail-telegram">Open Telegram</a></div><p class="metadata">Downloads and playback open the authorized file page. Browser codec support varies.</p></dialog>
+<nav class="safety" aria-label="Folder support">{% if bot_join_url %}<a href="{{ bot_join_url }}">Open Telegram ↗</a>{% endif %}{% if report_url %}<a href="{{ report_url }}">Report NSFW</a>{% endif %}</nav>
+{% with placement='inline' %}{% include 'components/ads.html' %}{% endwith %}
+<script type="application/json" id="folder-config">{{ files|tojson }}</script>
+{% endblock %}{% block scripts %}{% with access_page=true %}{% include 'components/ad_scripts.html' %}{% endwith %}{% endblock %}

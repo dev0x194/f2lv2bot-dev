@@ -323,9 +323,9 @@ async def gen_handler(request: web.Request):
         )
         _issue_page_session_cookie(response, session_id)
         return response
-    except FileNotFound:
+    except FileNotFound as exc:
         return web.Response(
-            text=await render_public_error_page("Link unavailable", "This file link is not available anymore. Send the file again to create a fresh link.", bot=request_bot),
+            text=await render_public_error_page("Link unavailable", "This file link is not available anymore. Send the file again to create a fresh link.", bot=request_bot, reason=str(exc)),
             content_type="text/html",
             status=404,
         )
@@ -369,9 +369,9 @@ async def gfolder_handler(request: web.Request):
         )
         _issue_page_session_cookie(response, session_id)
         return response
-    except FileNotFound:
+    except FileNotFound as exc:
         return web.Response(
-            text=await render_public_error_page("Folder unavailable", "This folder link is not available anymore. Open My Folders or create a new folder.", bot=request_bot),
+            text=await render_public_error_page("Folder unavailable", "This folder link is not available anymore. Open My Folders or create a new folder.", bot=request_bot, reason=str(exc)),
             content_type="text/html",
             status=404,
         )

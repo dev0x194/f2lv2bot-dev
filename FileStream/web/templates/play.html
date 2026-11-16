@@ -1,15 +1,15 @@
-{% extends 'base.html' %}{% block head %}{% if is_native_playable %}<link rel="stylesheet" href="/static/vendor/videojs/video-js.min.css">{% endif %}{% endblock %}
+{% extends 'base.html' %}{% from 'components/icons.html' import icon %}{% block head %}{% if is_native_playable %}<link rel="stylesheet" href="/static/vendor/videojs/video-js.min.css">{% endif %}{% endblock %}
 {% block topad %}{% with placement='top' %}{% include 'components/ads.html' %}{% endwith %}{% endblock %}
 {% block content %}
-<article class="file-page">
+<article class="file-page"><span class="icon-box accent-1">{{ icon("video" if is_playable else "file") }}</span>
 <p class="eyebrow">SHARED FILE · {{ container_format }}</p>
 <h1 class="filename" title="{{ file_name }}">{{ file_name }}</h1>
 <p class="metadata">{{ file_size }} <span aria-hidden="true">/</span> {{ mime_type }}{% if formatted_duration %} / {{ formatted_duration }}{% endif %}</p>
-{% if is_native_playable %}<section id="player-region" hidden aria-label="Media player">
+<dl class="media-specs">{% for label,value in [("Category",category),("Resolution",resolution),("Video codec",video_codec),("Audio codec",audio_codec),("Uploader",uploader)] %}{% if value %}<div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>{% endif %}{% endfor %}</dl>{% if is_native_playable %}<section id="player-region" hidden aria-label="Media player">
 <video id="player" class="video-js vjs-big-play-centered" playsinline preload="metadata"{% if poster_url %} poster="{{ poster_url }}"{% endif %} aria-label="{{ file_name }}">
 </video>
 </section>{% elif is_playable %}<p class="notice">This format may need an external player. Download it or open it in VLC; browser codec support varies.</p>{% endif %}
-<div class="actions">{% if is_native_playable %}<button class="primary" data-action="play">Play Online</button>{% endif %}<button class="primary" data-action="download">Download</button>{% if is_playable %}<button data-action="vlc">Open in VLC</button>{% endif %}<button data-action="share">Share File</button>
+<p id="connection-state" class="connection-state" role="status">Ready · secure file delivery</p><div class="actions">{% if is_native_playable %}<button class="primary" data-action="play">Play Online</button>{% endif %}<button class="primary" data-action="download">Download</button>{% if is_playable %}<button data-action="vlc">Open in VLC</button>{% endif %}<button data-action="share">Share File</button>
 </div>
 <div id="share-fallback" class="notice" hidden>
 <label>Share link<input id="share-url" readonly value="{{ share_url }}">

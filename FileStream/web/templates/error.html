@@ -1,8 +1,8 @@
-{% extends 'base.html' %}{% block content %}<section class="hero">
-<p class="eyebrow">LINK UNAVAILABLE</p>
+{% extends 'base.html' %}{% from 'components/icons.html' import icon %}{% block content %}<section class="hero">
+<span class="icon-box accent-3">{{ icon("shield") }}</span><p class="eyebrow">LINK UNAVAILABLE</p>
 <h1>{{ title }}</h1>
 <p class="lede">{{ message }}</p>
 <p>It may have expired, been revoked, or lost its backing file. Ask the sender for a new link.</p>
-<div class="actions">
+<div class="actions"><button data-go-back>Go Back</button>
 <a class="button primary" href="/">Go to home</a>{% if bot_join_url %}<a class="button" href="{{ bot_join_url }}">Open Telegram</a>{% endif %}</div>
 </section>{% endblock %}

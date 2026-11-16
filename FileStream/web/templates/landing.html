@@ -1,16 +1,16 @@
-{% extends 'base.html' %}{% block head %}<script type="application/ld+json">{{ schema_data|tojson }}</script>{% if preview_image_url %}<meta property="og:image" content="{{ preview_image_url }}">{% endif %}{% endblock %}
+{% extends 'base.html' %}{% from 'components/icons.html' import icon %}{% block head %}<script type="application/ld+json">{{ schema_data|tojson }}</script>{% if preview_image_url %}<meta property="og:image" content="{{ preview_image_url }}">{% endif %}{% endblock %}
 {% block topad %}{% with placement='top' %}{% include 'components/ads.html' %}{% endwith %}{% endblock %}
 {% block content %}
 <section class="hero">
-<p class="eyebrow">TELEGRAM → A LINK → ANYWHERE</p>
-<h1>Your files.<br>One simple link.</h1>
+<p class="eyebrow">FILE DELIVERY, STRAIGHT FROM TELEGRAM</p>
+<h1>Fast, Private File Delivery <span>from Telegram</span></h1>
 <p class="lede">Send a file in Telegram. Share its page. Let people watch, download, or open it right where they need it.</p>
 <div class="actions">{% if bot_join_url %}<a class="button primary" href="{{ bot_join_url }}">Open Telegram Bot <span aria-hidden="true">↗</span>
 </a>{% else %}<p class="notice">The bot is not configured yet. Please contact the administrator.</p>{% endif %}{% if add_to_group_url %}<a class="button" href="{{ add_to_group_url }}">Add to Group</a>{% endif %}</div>{% if updates_channel_url %}<a href="{{ updates_channel_url }}">Follow service updates ↗</a>{% endif %}</section>
 <section class="split">
 <div>
 <p class="eyebrow">A SHORT JOURNEY</p>
-<h2>From file to shared.</h2>
+<h2>How It Works</h2>
 </div>
 <ol class="steps">{% for step in steps %}<li>
 <span class="number">{{ '%02d'|format(loop.index) }}</span>
@@ -18,15 +18,15 @@
 </li>{% endfor %}</ol>
 </section>
 <section class="split">
-<h2>Built around your files.</h2>
+<h2>Platform Features</h2>
 <dl class="features">{% for feature in features %}<div>
-<dt>{{ feature.title }}</dt>
+<dt><span class="icon-box accent-{{ loop.index % 4 }}">{{ icon(["share", "video", "folder", "send"][loop.index0 % 4]) }}</span>{{ feature.title }}</dt>
 <dd>{{ feature.text }}</dd>
 </div>{% endfor %}</dl>
 </section>
 {% with placement='inline' %}{% include 'components/ads.html' %}{% endwith %}
 <section class="split">
-<h2>A few useful answers.</h2>
+<h2>Frequently Asked Questions</h2>
 <div>{% for faq in faq_items %}<details>
 <summary>{{ faq.question }}</summary>
 <p>{{ faq.answer }}</p>

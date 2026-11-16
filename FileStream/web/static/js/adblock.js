@@ -4,6 +4,7 @@
   if (!notice) return;
   let blocked = false;
   let bypass = false;
+  try { bypass = sessionStorage.getItem("filestream-adblock-bypass") === "true"; } catch (_) {}
   window.filestreamAccessAllowed = () => !blocked || bypass;
   const detect = () => {
     const bait = document.createElement("div");
@@ -17,15 +18,17 @@
         getComputedStyle(bait).display === "none" ||
         bait.getBoundingClientRect().height === 0;
       bait.remove();
-      notice.hidden = !blocked;
+      notice.hidden = !blocked || bypass;
     }, 150);
   };
   document.getElementById("adblock-retry").addEventListener("click", () => {
     bypass = false;
+    try { sessionStorage.removeItem("filestream-adblock-bypass"); } catch (_) {}
     detect();
   });
   document.getElementById("adblock-continue").addEventListener("click", () => {
     bypass = true;
+    try { sessionStorage.setItem("filestream-adblock-bypass", "true"); } catch (_) {}
     notice.hidden = true;
   });
   document.querySelectorAll("[data-folder-file]").forEach((a) =>

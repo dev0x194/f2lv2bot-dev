@@ -4,6 +4,8 @@
   if (!node) return;
   const config = JSON.parse(node.textContent);
   const status = document.getElementById("action-status");
+  const connection = document.getElementById("connection-state");
+  let busy = false;
   let player,
     lastAction,
     refreshes = 0;
@@ -72,6 +74,9 @@
           localStorage.setItem(resumeKey, String(player.currentTime()));
         } catch (_) {}
       });
+      for (const [event, text] of [["waiting", "Buffering…"], ["playing", "Connected · playing"], ["pause", "Playback paused"], ["ended", "Playback complete"]]) {
+        player.on(event, () => { connection.textContent = text; });
+      }
       player.on("ended", () => {
         try {
           localStorage.removeItem(resumeKey);
@@ -94,6 +99,8 @@
     await player.play();
   }
   async function run(action) {
+    if (busy) return;
+    busy = true;
     lastAction = action;
     retry.hidden = true;
     status.textContent = "Preparing…";
@@ -147,9 +154,20 @@
         return;
       }
       status.textContent = error.message;
+      connection.textContent = "Connection needs attention";
       retry.hidden = false;
+    } finally {
+      busy = false;
     }
   }
+  addEventListener("pagehide", (event) => {
+    if (event.persisted) return;
+    if (player) {
+      try { localStorage.setItem(resumeKey, String(player.ended() ? 0 : player.currentTime())); } catch (_) {}
+      player.dispose();
+      player = null;
+    }
+  });
   document
     .querySelectorAll("[data-action]")
     .forEach((button) =>

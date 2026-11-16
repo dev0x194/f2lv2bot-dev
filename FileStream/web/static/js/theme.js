@@ -1,9 +1,9 @@
 (() => {
   "use strict";
   const media = matchMedia("(prefers-color-scheme: dark)");
-  let preference = "system";
+  let preference = "dark";
   try {
-    preference = localStorage.getItem("filestream-theme") || "system";
+    preference = localStorage.getItem("filestream-theme") || "dark";
   } catch (_) {}
   if (!["system", "light", "dark"].includes(preference)) preference = "system";
   const apply = () => {

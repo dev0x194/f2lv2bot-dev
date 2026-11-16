@@ -406,3 +406,28 @@ async def test_legacy_redirects_never_reactivate_links():
     with pytest.raises(Missing):
         await ns["_resolve_active_legacy_reference"]("revoked", "file")
     db.get_active_public_link_for_target.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_v3_folder_metadata_and_safe_error_states():
+    from web_fixtures import mixed_folder_files
+    import re
+
+    e = environment()
+    files = mixed_folder_files(e.file)
+    e.db.get_file.side_effect = files
+    html = await e.render['render_folder'](
+        'folder', folder_doc=dict(files=list(range(len(files)))),
+        public_link=dict(public_id='folder-public'))
+    config = json.loads(re.search(r'id="folder-config">(.*?)</script>', html, re.S).group(1))
+    assert [f['size_bytes'] for f in config] == [8000, 2000, 500, None, 10000, 0]
+    assert '<img src=x' not in html
+    assert 'a' * 24 not in html
+    assert 'pageToken' not in html
+    for reason, expected in [('This link has expired', 'Link expired'),
+                             ('This link has been revoked', 'Link revoked'),
+                             ('Public link not found', 'Link not found'),
+                             ('secret database error', 'Unavailable')]:
+        page = await e.render['render_public_error_page']('Unavailable', 'Ask the sender.', reason=reason)
+        assert expected in page
+        assert 'secret database error' not in page

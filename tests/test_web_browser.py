@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from web_fixtures import ROOT, environment, ads_config
+from web_fixtures import ROOT, environment, ads_config, load_functions
 
 playwright = pytest.importorskip("playwright.async_api")
 
@@ -18,6 +18,13 @@ async def test_browser_layout_themes_actions_and_ads():
     e = environment()
     ad_requests = []
     errors = []
+    policy = load_functions(
+        "FileStream/bot/helpers/legal.py", names={"build_policy_page_context"},
+        Telegram=type("Settings", (), {"UPDATES_CHANNEL": ""})(),
+        build_updates_channel_url=lambda: None,
+        build_policy_url=lambda p, **kw: "/" + p,
+        POLICY_LAST_UPDATED="2026-04-19")
+    e.render["build_policy_page_context"] = policy["build_policy_page_context"]
 
     async def page_handler(request):
         enabled = request.query.get("ads") == "on"
@@ -26,6 +33,10 @@ async def test_browser_layout_themes_actions_and_ads():
         path = request.path
         if path == "/":
             html = await e.render["render_landing_page"](bot=e.bot)
+        elif path in {"/legal", "/privacy"}:
+            html = await e.render["render_policy_page"](path[1:], bot=e.bot)
+        elif path == "/error":
+            html = await e.render["render_public_error_page"]("Unavailable", "Ask the sender for a new link.")
         elif path.startswith("/gfolder/"):
             e.db.get_file.side_effect = None
             e.db.get_file.return_value = e.file
@@ -45,6 +56,8 @@ async def test_browser_layout_themes_actions_and_ads():
 
     app = web.Application()
     app.router.add_get("/", page_handler)
+    for path in ["/legal", "/privacy", "/error"]:
+        app.router.add_get(path, page_handler)
     app.router.add_get("/gen/{id}", page_handler)
     app.router.add_get("/gfolder/{id}", page_handler)
     app.router.add_static("/static/", ROOT / "FileStream/web/static")
@@ -67,7 +80,7 @@ async def test_browser_layout_themes_actions_and_ads():
         output.mkdir(exist_ok=True, parents=True)
         for width in [320, 375, 768, 1440]:
             await page.set_viewport_size(dict(width=width, height=900))
-            for path in ["/", "/gen/public-file", "/gfolder/folder"]:
+            for path in ["/", "/gen/public-file", "/gfolder/folder", "/legal", "/privacy", "/error"]:
                 await page.goto(base + path)
                 assert await page.evaluate(
                     "document.documentElement.scrollWidth <= innerWidth"
@@ -235,4 +248,72 @@ async def test_videojs_mp4_playback_seek_and_expired_url_refresh():
         await page.evaluate('videojs("player").trigger("error")')
         await page.wait_for_timeout(1200)
         assert len(e.tokens._access_tokens) >= 3
+        await page.click('[data-action="vlc"]')
+        await page.wait_for_function('document.getElementById("external-url").value.includes("/stream/")')
+        assert (await page.locator('#launch-vlc').get_attribute('href')).startswith('vlc://http')
+        duration = await page.evaluate('videojs("player").duration()')
+        if duration > 12:
+            await page.evaluate('videojs("player").currentTime(6); videojs("player").pause()')
+            await page.reload()
+            await page.click('[data-action="play"]')
+            await page.wait_for_function('videojs("player").currentTime() >= 6')
+        await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_v3_folder_composed_controls_drawer_and_sharing():
+    from web_fixtures import mixed_folder_files
+    e = environment()
+    e.db.get_file.side_effect = mixed_folder_files(e.file)
+    html = await e.render['render_folder'](
+        'folder', folder_doc=dict(files=list(range(6))),
+        public_link=dict(public_id='folder-public'))
+    app = web.Application()
+    app.router.add_get('/gfolder/folder-public', lambda request: web.Response(text=html, content_type='text/html'))
+    app.router.add_static('/static/', ROOT / 'FileStream/web/static')
+    async with TestServer(app) as server, playwright.async_playwright() as pw:
+        browser = await pw.chromium.launch(args=['--no-sandbox'])
+        page = await browser.new_page(viewport=dict(width=390, height=844))
+        await page.add_init_script("""
+          Object.defineProperty(navigator, 'share', {value: undefined});
+          Object.defineProperty(navigator, 'clipboard', {value:{writeText: async text => {window.copied=text;}}});
+        """)
+        await page.goto(str(server.make_url('/gfolder/folder-public')))
+        assert await page.locator('html').get_attribute('data-theme') == 'dark'
+        await page.select_option('#file-sort', 'large')
+        assert 'Bundle.zip' in await page.locator('.file-card').first.inner_text()
+        await page.fill('#file-search', 'ALPHA')
+        assert await page.locator('.file-card:visible').count() == 1
+        await page.click('[data-filter="video"]')
+        assert await page.locator('#empty-results').is_visible()
+        await page.click('#reset-files')
+        await page.click('[data-filter="documents"]')
+        assert await page.locator('.file-card:visible').count() == 1
+        await page.locator('.file-card:visible a').focus()
+        await page.keyboard.press('Enter')
+        assert await page.locator('#file-details').is_visible()
+        assert await page.locator('#detail-name').inner_text() == 'Guide.pdf'
+        assert not await page.locator('#detail-play').is_visible()
+        assert await page.locator('#detail-download').get_attribute('href') == '/gen/public-file'
+        await page.click('#detail-copy')
+        assert (await page.evaluate('window.copied')).endswith('/gen/public-file')
+        assert 'copied' in await page.locator('#toast').inner_text()
+        await page.keyboard.press('Escape')
+        assert not await page.locator('#file-details').is_visible()
+        assert await page.evaluate('document.activeElement.matches("[data-folder-file]")')
+        await page.click('[data-filter="other"]')
+        await page.locator('.file-card:visible a').click()
+        assert '<img src=x' in await page.locator('#detail-name').inner_text()
+        assert await page.locator('#detail-name img').count() == 0
+        await page.screenshot(path='/tmp/filestream-web-qa/390-drawer.png', full_page=True)
+        assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        await page.keyboard.press('Escape')
+        for key in ['all','video','audio','images','documents','archive','other']:
+            await page.click(f'[data-filter="{key}"]')
+            assert await page.locator('.file-card:visible').count() == (6 if key == 'all' else 1)
+        await page.click('[data-filter="all"]')
+        await page.select_option('#file-sort', 'small')
+        assert 'Guide.pdf' in await page.locator('.file-card').last.inner_text()
+        await page.click('[data-share-url]')
+        assert (await page.evaluate('window.copied')).endswith('/gfolder/folder-public')
         await browser.close()

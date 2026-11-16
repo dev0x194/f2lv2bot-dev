@@ -1,4 +1,4 @@
-# FileStream Web V2
+# FileStream Web V3
 
 Fresh aiohttp/Jinja frontend, with no SPA or frontend build required. The legacy
 `FileStream/template` and `FileStream/static` text files are left untouched.
@@ -41,7 +41,7 @@ media handler, replacing only the Telegram transport.
 
 - `/`: trusted-host bot branding, bot/group/updates links, steps, FAQ and SEO.
 - `/gen/{public_id}`: exactly one file; supported browser containers get Video.js.
-- `/gfolder/{public_id}`: numbered links in the stored `folder.files` order. Empty
+- `/gfolder/{public_id}`: searchable file cards, initially in stored `folder.files` order. Empty
   folders render an empty state. Deleted entries are skipped. The source has no
   folder-pagination API; rendering remains linear in folder size.
 - `/legal`, `/privacy`: existing backend policy content; no ad or access gate.
@@ -74,7 +74,7 @@ ellipsis. A same-origin folder return link is remembered in sessionStorage.
 ## Themes and player
 
 `theme.js` runs synchronously in the head before styles. `filestream-theme` stores
-`system` (default), `light`, or `dark`. System mode follows live OS changes;
+`dark` (default), `system`, or `light`. System mode follows live OS changes;
 storage events synchronize tabs. Storage failures are nonfatal. System fonts,
 CSS variables, visible focus, skip navigation, large controls, reduced motion
 and narrow-screen layouts are built in.
@@ -86,7 +86,7 @@ assets). Sources: [maintained v8 repository](https://github.com/videojs/videojs-
 Verify assets: `python FileStream/web/tools/vendor.py`; restore exact pinned
 files: `python FileStream/web/tools/vendor.py --fetch`.
 
-The player supports normal controls, browser-supported fullscreen/PiP, six speed
+The player supports normal controls, browser-supported fullscreen/PiP, five speed
 options, safe per-public-ID resume positions, optional authorized WebVTT/WebP
 scrub previews and a retry/one-time URL refresh after errors. MP4/M4V/WebM and
 common audio containers are offered for browser playback; codecs still depend
@@ -179,3 +179,44 @@ Third-party frames receive neither page URL referrers nor authorization values.
 Implementation checks used isolated fixtures only. Full bot startup, live Mongo
 persistence, production Telegram streaming, native VLC launch, physical mobile
 browsers and real provider delivery are deployment QA items, not verified claims.
+
+## V3 interface
+
+The existing templates now use a black/zinc design with a 32px grid, restrained
+radial glow, locally authored SVG icons, white primary actions and responsive
+cards. Light and System remain available. No fonts, icon CDN, build tool, or new
+runtime dependencies are required; Geist/Inter/JetBrains Mono use local fonts
+when installed and system fallbacks otherwise.
+
+Folder search, type chips and stable name/size sorting compose together. Exact
+`size_bytes` is additive renderer metadata; missing sizes sort last in either
+direction. Original folder order remains the initial view. Dates are not exposed
+reliably, so no chronological sort is offered. The native details dialog supports
+Escape, backdrop dismissal, focus restoration and a mobile bottom sheet. Download
+and playback links open the existing authorized file page before issuing tokens;
+folder pages never mint file capabilities. Share and copy use public URLs only.
+
+Known expired/revoked/missing/wrong-kind backend link errors have public messages;
+unknown errors retain generic text. No exception details are rendered. Advertising
+continues in isolated frames; anti-adblock is a nonmodal keyboard-accessible
+warning with a session-persisted Continue override. It cannot trap navigation.
+
+V3 screenshots and browser regression artifacts are written to
+`/tmp/filestream-web-qa`. Production Telegram/MongoDB, native VLC launching,
+physical devices and live advertisement providers still require release QA.
+
+### Verified in this workspace
+
+`WEB_MEDIA_FIXTURE=/tmp/filestream-test-trailer.mp4 /tmp/filestream-web-venv/bin/python -m pytest -q`
+completed with **21 passed**. These tests use the actual Jinja templates, renderer,
+route functions and Range handler, with fixture service adapters. Chromium covers
+320/375/768/1440px landing, file, folder, legal, privacy and error layouts; a 390px
+mixed-file folder covers filters, combined search, sorting, dialog keyboard/focus,
+clipboard sharing and hostile filename rendering. Other checks cover themes,
+ad placement isolation and disabling, detector override, token/session enforcement,
+revocation, byte ranges, local MP4 playback/seeking/retry, resume where the fixture
+is long enough, and preparation of VLC URLs. Native VLC launching is not tested.
+
+`python FileStream/web/tools/vendor.py` verified all four pinned Video.js assets.
+First-party JavaScript parsing and Python/template compilation are included in
+the regression suite. No production bot, database, provider or deployment was used.

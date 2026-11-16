@@ -80,6 +80,7 @@
         progress.removeEventListener("pointerleave", hide);
         preview.remove();
       };
+      player.one("dispose", cleanup);
     } catch (_) {}
   };
 })();

@@ -384,6 +384,7 @@ async def render_folder(
                 "name": file_name,
                 "_sort_name": raw_name,
                 "size": humanbytes(file_data.get("file_size") or 0),
+                "size_bytes": file_data.get("file_size"),
                 "mime": mime,
                 "kind": kind,
                 "category": category,
@@ -627,7 +628,16 @@ def render_sitemap_xml(*, bot=None) -> str:
     )
 
 
-async def render_public_error_page(title: str, message: str, *, bot=None) -> str:
+async def render_public_error_page(title: str, message: str, *, bot=None, reason: str | None = None) -> str:
+    # Only known public states are translated; exception details never reach HTML.
+    public_errors = {
+        "This link has been revoked": ("Link revoked", "The owner has withdrawn this link. Ask them for a new share link."),
+        "This link has expired": ("Link expired", "This share link has expired. Ask the sender for a fresh link."),
+        "Public link not found": ("Link not found", "This link is invalid or no longer exists. Check the address with the sender."),
+        "File link not found": ("Invalid file link", "This address does not identify an available shared file."),
+        "Folder link not found": ("Invalid folder link", "This address does not identify an available shared folder."),
+    }
+    title, message = public_errors.get(reason, (title, message))
     template_file = _resolve_template_path("error.html")
     with open(template_file, "r", encoding="utf-8") as f:
         template = env.from_string(f.read())

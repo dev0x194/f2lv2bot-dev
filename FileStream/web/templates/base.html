@@ -11,7 +11,7 @@
 </script>
 <link rel="stylesheet" href="/static/css/app.css">{% block head %}{% endblock %}
 </head>
-<body><noscript><p class="notice">JavaScript is needed for themes and authorized downloads/playback. You can still use the Telegram, legal and privacy links.</p></noscript>
+<body>{% from "components/icons.html" import icon %}<noscript><p class="notice">JavaScript is needed for themes and authorized downloads/playback. You can still use the Telegram, legal and privacy links.</p></noscript>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-header">
 <a class="brand" href="/" aria-label="{{ bot_name or 'FileStream' }} home">
@@ -21,12 +21,12 @@
 <span>{{ bot_name or 'FileStream' }}<small>Files, simply shared</small>
 </span>
 </a>
-<label class="theme">Theme<select id="theme" aria-label="Color theme">
+<div class="header-actions">{% if bot_join_url %}<a class="button header-bot" href="{{ bot_join_url }}">{{ icon("send") }} Telegram Bot</a>{% endif %}<label class="theme">Theme<select id="theme" aria-label="Color theme">
 <option value="system">System</option>
 <option value="light">Light</option>
 <option value="dark">Dark</option>
 </select>
-</label>
+</label></div>
 </header>
 {% block topad %}{% endblock %}
 <main id="main" tabindex="-1">{% block content %}{% endblock %}
@@ -37,6 +37,7 @@
 <a href="{{ legal_url or '/legal' }}">Terms</a>
 <a href="{{ privacy_url or '/privacy' }}">Privacy</a>{% if bot_join_url %}<a href="{{ bot_join_url }}">Help in Telegram</a>{% endif %}</nav>
 </footer>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script src="/static/js/app.js" defer>
 </script>{% block scripts %}{% endblock %}
 </body>

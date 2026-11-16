@@ -184,3 +184,15 @@ def environment(enabled=False):
     return SimpleNamespace(
         render=render, routes=routes, db=db, tokens=tokens, file=file, bot=bot
     )
+
+
+def mixed_folder_files(base):
+    """Real renderer inputs covering type, unknown size, and hostile names."""
+    return [
+        dict(base, file_name='Zebra.mp4', mime_type='video/mp4', file_size=8000),
+        dict(base, file_name='Alpha.mp3', mime_type='audio/mpeg', file_size=2000),
+        dict(base, file_name='Photo.png', mime_type='image/png', file_size=500),
+        dict(base, file_name='Guide.pdf', mime_type='application/pdf', file_size=None),
+        dict(base, file_name='Bundle.zip', mime_type='application/zip', file_size=10000),
+        dict(base, file_name='<img src=x onerror=alert(1)>.bin', mime_type='', file_size=0),
+    ]

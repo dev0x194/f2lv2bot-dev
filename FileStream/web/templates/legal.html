@@ -2,5 +2,5 @@
 <p class="eyebrow">SERVICE INFORMATION · UPDATED {{ last_updated }}</p>
 <h1>{{ page_title }}</h1>
 <p class="lede">{{ page_subtitle }}</p>{% for section in sections %}<section id="{{ section.id }}">
-<h2>{{ section.title }}</h2>{% for paragraph in section.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}{% if section.bullets %}<ul>{% for bullet in section.bullets %}<li>{{ bullet }}</li>{% endfor %}</ul>{% endif %}</section>{% endfor %}<p>Your theme and per-file playback position are stored in this browser. External player links are temporary bearer URLs; keep them private.</p>
+<p class="eyebrow">SECTION {{ "%02d"|format(loop.index) }}</p><h2>{{ section.title }}</h2>{% for paragraph in section.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}{% if section.bullets %}<ul>{% for bullet in section.bullets %}<li>{{ bullet }}</li>{% endfor %}</ul>{% endif %}</section>{% endfor %}<p>Your theme and per-file playback position are stored in this browser. External player links are temporary bearer URLs; keep them private.</p>
 </article>{% endblock %}
