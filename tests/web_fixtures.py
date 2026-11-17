@@ -46,7 +46,7 @@ class Missing(Exception):
     pass
 
 
-def ads_config(enabled=False):
+def ads_config(enabled=False, smartlink_url="https://ads.test/smart"):
     def slot(key, w, h):
         return dict(
             enabled=enabled,
@@ -69,7 +69,7 @@ def ads_config(enabled=False):
             bottom_banner=slot("shared", 300, 250),
             social_bar_url="",
         ),
-        smartlink_url="https://ads.test/smart",
+        smartlink_url=smartlink_url if enabled else "",
         popunder_url="",
     )
 
@@ -197,3 +197,14 @@ def mixed_folder_files(base):
         dict(base, file_name='Bundle.zip', mime_type='application/zip', file_size=10000),
         dict(base, file_name='<img src=x onerror=alert(1)>.bin', mime_type='', file_size=0),
     ]
+
+
+def web_ads_settings(values=None, bot_overrides=None):
+    """Execute actual environment parsers and ad settings without bot startup."""
+    tree = ast.parse((ROOT / 'FileStream/config.py').read_text())
+    nodes = [node for node in tree.body if
+             isinstance(node, ast.FunctionDef) and node.name in {'_bool_env', '_int_env', '_str_env'}
+             or isinstance(node, ast.ClassDef) and node.name == 'WebAds']
+    namespace = dict(env=values or {}, _BOT_WEB_AD_OVERRIDES=bot_overrides or {})
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), 'config.py', 'exec'), namespace)
+    return namespace['WebAds']

@@ -1,0 +1,5 @@
+{% if ad_config.enabled and ad_config.smartlink_url %}<aside class="sponsored-link" aria-label="Sponsored advertising">
+<p class="eyebrow">ADVERTISEMENT · OPTIONAL</p>
+<a class="button" data-sponsored-link href="{{ ad_config.smartlink_url }}" rel="sponsored nofollow noopener noreferrer" referrerpolicy="no-referrer">Sponsored link <span aria-hidden="true">↗</span></a>
+<p class="metadata">Opens an external advertising site in this tab. File access does not require visiting it.</p>
+</aside>{% endif %}

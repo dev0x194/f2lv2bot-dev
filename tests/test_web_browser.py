@@ -143,10 +143,28 @@ async def test_browser_layout_themes_actions_and_ads():
             await page.wait_for_function('Array.from(document.querySelectorAll("[data-ad-placement]")).every(el => el.dataset.adState === "content-unverified")')
             before = list(ad_requests)
             await page.add_script_tag(url=base + "/static/js/ads.js")
-            await page.set_viewport_size(dict(width=390 if width == 1440 else 1400, height=900))
+            # Ordinary resizing within a breakpoint makes no provider requests.
+            await page.set_viewport_size(dict(width=width + 10, height=900))
             await page.wait_for_timeout(100)
             assert ad_requests == before
+            # Crossing the breakpoint selects the right unit once, keeping the
+            # identical 300x250 document and retaining the old top document hidden.
+            await page.set_viewport_size(dict(width=390 if width == 1440 else 1400, height=900))
+            other = "mobile" if width == 1440 else "wide"
+            await page.wait_for_function("expected => document.querySelector('[data-ad-placement=top]').dataset.adDevice === expected", arg="mobile" if width == 1440 else "desktop")
+            top_frame = page.locator('[data-ad-placement="top"] > iframe:visible')
+            await top_frame.wait_for()
+            child = await (await top_frame.element_handle()).content_frame()
+            assert await child.locator("[data-key]").get_attribute("data-key") == other
+            assert sorted(ad_requests) == sorted(before + [f"https://ads.test/{other}.js"])
+            assert await page.locator('[data-ad-placement] > iframe:visible').count() == 2
+            switched = list(ad_requests)
             await page.set_viewport_size(dict(width=width, height=900))
+            await page.wait_for_function("expected => document.querySelector('[data-ad-placement=top]').dataset.adDevice === expected", arg="desktop" if width == 1440 else "mobile")
+            child = await (await top_frame.element_handle()).content_frame()
+            assert await child.locator("[data-key]").get_attribute("data-key") == top
+            assert ad_requests == switched
+            assert await page.locator('[data-ad-placement] > iframe:visible').count() == 2
             # Positive bait hiding gates optional actions only; an override remains available.
             await page.add_style_tag(content=".adsbox {display:none !important}")
             (
@@ -351,4 +369,117 @@ async def test_v3_folder_composed_controls_drawer_and_sharing():
         assert 'Guide.pdf' in await page.locator('.file-card').last.inner_text()
         await page.click('[data-share-url]')
         assert (await page.evaluate('window.copied')).endswith('/gfolder/folder-public')
+        await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_ads_independent_units_across_breakpoints_and_inactive_failure():
+    """A hidden unit's delayed failure must not hide the current device's ad."""
+    config = ads_config(True)
+    config['mobile']['bottom_banner'].update(
+        key='mobile-bottom', invoke_url='https://ads.test/mobile-bottom.js')
+    requests = []
+    async with playwright.async_playwright() as pw:
+        browser = await pw.chromium.launch(args=['--no-sandbox'])
+        page = await browser.new_page(viewport=dict(width=1440, height=900))
+
+        async def provider(route):
+            requests.append(route.request.url)
+            await route.fulfill(content_type='application/javascript', body="document.write('<p>'+atOptions.key+'</p>')")
+
+        await page.route('https://ads.test/**', provider)
+        await page.set_content(
+            '<style>[hidden]{display:none!important}.ad-placement{display:none}.ad-placement.loaded{display:block}</style>'
+            '<aside class="ad-placement" data-ad-placement="top"></aside>'
+            '<aside class="ad-placement" data-ad-placement="inline"></aside>'
+            '<script id="ad-config" type="application/json">' + json.dumps(config) + '</script>')
+        await page.add_script_tag(path=str(ROOT / 'FileStream/web/static/js/ads.js'))
+        await page.wait_for_function('document.querySelectorAll("[data-ad-state=content-unverified]").length === 2')
+        assert sorted(requests) == ['https://ads.test/shared.js', 'https://ads.test/wide.js']
+        await page.set_viewport_size(dict(width=375, height=900))
+        await page.wait_for_function('document.querySelectorAll("[data-ad-device=mobile][data-ad-state=content-unverified]").length === 2')
+        assert sorted(requests) == sorted('https://ads.test/' + name + '.js' for name in ['wide', 'shared', 'mobile', 'mobile-bottom'])
+        top = page.locator('[data-ad-placement=top] > iframe:visible')
+        mobile_frame = await (await top.element_handle()).content_frame()
+        assert await mobile_frame.evaluate('atOptions.width') == 320
+        assert await mobile_frame.evaluate('atOptions.height') == 50
+        bottom = await (await page.locator('[data-ad-placement=inline] > iframe:visible').element_handle()).content_frame()
+        assert await bottom.evaluate('atOptions.key') == 'mobile-bottom'
+        await page.set_viewport_size(dict(width=1440, height=900))
+        await page.wait_for_function('document.querySelectorAll("[data-ad-device=desktop][data-ad-state=content-unverified]").length === 2')
+        await mobile_frame.evaluate("parent.postMessage({type:'filestream-ad',state:'error'},'*')")
+        await page.wait_for_timeout(100)
+        assert await page.locator('.ad-placement.loaded > iframe:visible').count() == 2
+        desktop_frame = await (await top.element_handle()).content_frame()
+        assert await desktop_frame.evaluate('atOptions.key') == 'wide'
+        assert await desktop_frame.evaluate('atOptions.width') == 728
+        assert len(requests) == 4
+        await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_smartlink_explicit_navigation_mobile_and_desktop():
+    from web_fixtures import web_ads_settings
+    e = environment(True)
+    destination = 'https://ads.test/smart?campaign=public&placement=optional'
+    navigation_requests = []
+
+    async def render(request):
+        mode = request.query.get('mode', 'on')
+        values = {'WEB_ADS_ENABLED': 'False' if mode == 'global-off' else 'True',
+                  'WEB_ADS_SMARTLINK_URL': '' if mode == 'missing' else 'javascript:alert(1)' if mode == 'unsafe' else destination}
+        for prefix in ['DESKTOP_TOP', 'DESKTOP_INLINE', 'MOBILE_TOP', 'MOBILE_BOTTOM']:
+            values['WEB_ADS_' + prefix + '_BANNER_INVOKE_URL'] = 'https://ads.test/banner/' + prefix + '.js'
+        e.render['WebAds'] = web_ads_settings(values)
+        e.db.get_web_ads_status.return_value = mode != 'admin-off'
+        return web.Response(text=await e.render['render_public_page']('public-file', session_id='private-session'), content_type='text/html')
+
+    app = web.Application()
+    app.router.add_get('/gen/public-file', render)
+    app.router.add_static('/static/', ROOT / 'FileStream/web/static')
+    async with TestServer(app) as server, playwright.async_playwright() as pw:
+        browser = await pw.chromium.launch(args=['--no-sandbox'])
+        for mobile in [True, False]:
+            context = await browser.new_context(**(pw.devices['Pixel 7'] if mobile else dict(viewport=dict(width=1440, height=900))))
+            async def provider(route):
+                if route.request.url == destination:
+                    navigation_requests.append(route.request)
+                    await route.fulfill(content_type='text/html', body='<p>Mock destination reached</p>')
+                else:
+                    await route.fulfill(content_type='application/javascript', body="document.write('<div>Fixture</div>');")
+            await context.route('https://ads.test/**', provider)
+            page = await context.new_page()
+            base = str(server.make_url('/gen/public-file'))
+            for mode in ['missing', 'unsafe', 'admin-off', 'global-off']:
+                await page.goto(base + '?mode=' + mode)
+                assert await page.locator('[data-sponsored-link]').count() == 0
+            await page.goto(base)
+            link = page.get_by_role('link', name='Sponsored link')
+            assert await link.get_attribute('href') == destination
+            assert await link.get_attribute('target') is None
+            assert await link.get_attribute('referrerpolicy') == 'no-referrer'
+            assert set((await link.get_attribute('rel')).split()) >= {'sponsored', 'noreferrer', 'noopener'}
+            await page.wait_for_timeout(200)
+            assert len(navigation_requests) == int(not mobile)
+            assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            assert await page.locator('[data-action="download"]').count() == 1
+            assert await page.locator('[data-action="play"]').count() == 1
+            assert await page.locator('[data-action="vlc"]').count() == 1
+            # A download error remains an independent file action, with no ad navigation.
+            await page.route('**/get-download-token/**', lambda r: r.fulfill(status=403, body='Expired'))
+            await page.click('[data-action="download"]')
+            await page.wait_for_function("document.querySelector('#action-status').textContent.includes('expired')")
+            assert len(navigation_requests) == int(not mobile)
+            assert page.url == base
+            await page.screenshot(path=f'/tmp/filestream-web-qa/smartlink-{mobile}.png', full_page=True)
+            await link.focus()
+            await page.keyboard.press('Enter')
+            await page.wait_for_url(destination)
+            assert len(context.pages) == 1
+            request = navigation_requests[-1]
+            assert not request.headers.get('referer')
+            assert request.url == destination
+            assert 'private-session' not in request.url
+            await context.close()
+        assert len(navigation_requests) == 2
         await browser.close()

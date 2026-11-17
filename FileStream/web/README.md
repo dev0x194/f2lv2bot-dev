@@ -125,9 +125,13 @@ Existing configuration names are preserved:
 Banner suffixes are `KEY`, `INVOKE_URL`, `WIDTH`, `HEIGHT`. Each slot keeps its
 own key, URL and dimensions, including independent desktop-inline/mobile-bottom
 settings. Only the active viewport's top and secondary units initialize. Resizing
-scales existing units to fit without changing their internal viewport or making
-new provider requests. Reload the page after switching device layouts to select
-that device's placements.
+within the same breakpoint scales existing units without new provider requests.
+Crossing 767px selects the new device's units and hides the old documents. Each
+unique key/URL/dimension tuple initializes at most once per placement per page;
+returning to a previous breakpoint reuses its attached document. Identical 300×250
+settings share one document across breakpoints, while independent configurations
+remain independent. Failed units are retained as failed records and are not retried.
+Hidden units' delayed messages cannot change the active unit's visibility/state.
 
 Invocation URLs are HTTPS JavaScript resources, not iframe destinations. Each
 opaque-origin sandboxed `srcdoc` document defines its own `atOptions` before a
@@ -250,6 +254,88 @@ Full local suite with the MP4 fixture: **21 passed**. These mocked integration a
 media tests do not establish live provider fill. No deployment, commit or push was
 performed for this follow-up.
 
+### Latest live recheck and responsive correction (2026-11-17)
+
+The deployed source, container and HTTPS `/static/js/ads.js` all matched commit
+50d84fe's loader SHA-256:
+`d567ce02ad8a974f42b214b2000e68b9186e9b6c9306710e3e859705c9029b76`.
+The 20 advertising environment fields again matched `.env`; ads were True,
+no per-bot ad overrides were configured, and social bars remained off by default.
+Effective enablement is an AND: global setting, per-bot configured enablement,
+and the persisted admin Web Ads status must all permit ads. The admin switch
+can turn configured ads off, but cannot override global False. Global banner
+fields supply defaults; `MULTI_TOKEN<n>_WEB_ADS_*` supplies per-bot overrides.
+Existing process variables take precedence over python-dotenv-loaded files.
+The live homepage's rendered ad config confirms its admin gate permits banners.
+
+A randomly named temporary HTML file was served under the existing site's static
+route, containing only the original supplied 320×50 code in BODY and viewport
+metadata. Chromium loaded it from `https://tdrp.cc`; the document and provider
+script were real HTTP requests, not intercepted/mocked. It returned HTTP 200 with
+zero script bytes, no redirect, no creative and no console/script error. The file
+was removed immediately after the diagnostic run. No permanent diagnostic route,
+application authorization data, or credential was published.
+
+Fresh GETs of **all three** unique endpoints again returned HTTP 200, zero bytes,
+`application/javascript`, and zero redirects from host curl and Chromium.
+Host referrer/no-referrer comparisons were unchanged. Python urllib inside the
+running container received HTTP 403, 17 bytes, `text/plain; charset=UTF-8`, no
+redirects. These responses contain Cloudflare error 1010; it identifies client
+signature blocking for those server probes, not the reason browsers receive empty
+scripts. No executable provider code was delivered to the tested browser requests.
+
+Live Pixel 7 emulation measured mobile top at **320×50 rendered pixels**, with
+`atOptions` key `d76c947d5bce357e40ad06c5443da535`, width 320 and height 50.
+Mobile bottom rendered at **300×250**, using
+`360f27a067037e47107b2b725150e7b5`. Desktop rendered **728×90** with
+`f0c271d2355a57b29b6b278209294341`, plus a single 300×250 inline banner.
+No wrong-device units were requested at initial load. The live mobile homepage
+hid both placements at the grace timeout and removed the empty frames by 65
+seconds. No indefinitely visible empty panel was reproduced for these responses.
+Cross-origin frames that exist but are unfilled remain unknown; their contents
+are never inspected or claimed to be filled.
+
+A separate lifecycle defect was reproduced locally: opening at desktop width
+then resizing to 375px retained the desktop key and 728×90 dimensions. The loader
+now switches units on media-query changes, retaining documents in place to avoid
+iframe reloads when returning to a prior viewport. Identical secondary settings
+are reused; distinct mobile/desktop settings stay independent. Event handlers
+track each unit's state so delayed failure/content messages from a hidden unit
+cannot hide/reveal the current device's placement. Ordinary within-breakpoint
+resizing and repeated script initialization make no extra provider requests.
+
+The patched loader was also tested against the real homepage and provider using
+a browser-local replacement of only `/static/js/ads.js` (not a server deployment).
+Desktop → mobile → desktop → mobile measured the correct 728×90/320×50 top unit
+and 300×250 secondary unit. Only three unique provider requests occurred; shared
+secondary and previous top documents were reused. All three responses were still
+200/0 bytes with no redirects or script errors. After the grace period, both active
+placements had state `empty`, display `none`, and zero remaining frames. This is
+live request/cleanup verification, not successful ad fill.
+
+Changed files: `static/js/ads.js`, `tests/test_web_browser.py`, and this README.
+Validation: `WEB_MEDIA_FIXTURE=/tmp/filestream-test-trailer.mp4
+/tmp/filestream-web-venv/bin/python -m pytest -q` completed with **22 passed**.
+The regression adds independent-unit breakpoint switching and an inactive unit's
+late failure, alongside existing keys/options, sandbox, failure/empty/timeout,
+Anti-AdBlock, layouts, token security, downloads and MP4 playback checks. Local
+fixtures establish integration behavior; they do not establish real provider fill.
+
+Publisher action is required to investigate live delivery. In the actual network's
+publisher dashboard, select the **tdrp.cc** website (or correct the registration if
+that is not the approved domain), verify website and each banner are approved and
+active, and open GET CODE for 320×50, 300×250 and 728×90. Compare the full current
+script URLs, keys and dimensions to this site's four configured slots; update only
+fields demonstrably different from the provider's current code. If approval is
+pending/rejected, resolve the stated dashboard reason before expecting delivery.
+If domain, status and code match, provide support with the empty original-snippet
+response evidence and ask them to identify disabled zones, delivery restrictions,
+or inventory eligibility and restore executable script delivery. Check their
+request/impression counters for these units during a real visit. We cannot infer
+which dashboard item is wrong from an empty response, nor change the account
+without access. No keys, provider, iframe privileges, CSP, popunder policy, media
+authorization or frontend design were changed.
+
 ### Deployment diagnostics
 
 `config.py` loads `ENV_FILE` when supplied, otherwise the repository `.env`;
@@ -270,11 +356,90 @@ sandbox and script errors. Compare ordinary Chrome with Telegram on the same
 network and inspect each ad frame separately. Empty HTTP 200 is not proof of an
 ad blocker. Do not copy media capability URLs or cookies into provider support logs.
 
-`WEB_ADS_SMARTLINK_URL` and `WEB_ADS_POPUNDER_URL` remain existing configuration
-fields, but V2 intentionally executes neither: no site policy authorizes
-popunders, and extra windows are unnecessary to complete Play/Download. There
-are no automatic ad redirects. Safety, bot, sharing, VLC, theme and navigation
-never trigger ad windows. Ads OFF means no ad config/scripts/slots/detector.
+### Optional Smartlink / sponsored navigation
+
+`WEB_ADS_SMARTLINK_URL` is now rendered as one **Sponsored link** beside the
+secondary banner on landing, file and folder pages. It is an ordinary accessible
+anchor, opens the configured HTTPS destination in the same tab only when selected,
+and works without JavaScript. An “ADVERTISEMENT · OPTIONAL” label and explanatory
+copy separate it from Play, Download, VLC and folder controls. Banner failure does
+not remove this independent control. Legal/error pages have no sponsored action.
+
+Root cause: configuration already loaded and reached `ad-config`, but the old
+frontend deliberately never consumed it. No Smartlink anchor/event existed.
+The old `.env.example` comment described an obsolete ad gate. There is no current
+ad gate or separate Smartlink enable setting, and none has been introduced.
+
+Configuration and precedence:
+
+1. Compose injects `.env` into the container. Existing process variables take
+   precedence over python-dotenv file loading (`ENV_FILE`, then repository `.env`).
+2. `WEB_ADS_SMARTLINK_URL` is the global destination; the default is now empty,
+   removing the old hardcoded fallback. Missing/blank means no sponsored link.
+3. `MULTI_TOKEN<n>_WEB_ADS_SMARTLINK_URL` overrides it for that bot. An explicitly
+   blank or invalid override disables Smartlink for that bot without falling back.
+4. Global `WEB_ADS_ENABLED`, per-bot configured enablement and the persisted admin
+   `/webads` switch must all permit advertising. Admin ON cannot override global
+   OFF. This applies to Smartlink as well as banners.
+5. Backend validation rejects non-HTTPS, relative, credential-bearing, malformed
+   host/port, whitespace/control-character and backslash destinations. Invalid URLs
+   become empty before reaching JSON or Jinja. Valid values are autoescaped in HTML.
+
+The URL remains administrator-controlled public advertising configuration. It is
+never fetched by the production backend, executed as JavaScript, embedded as an
+iframe, or augmented with file/session/stream tokens. The anchor uses
+`rel="sponsored nofollow noopener noreferrer"` and `referrerpolicy="no-referrer"`.
+No popups, automatic navigation, download/play interception, required clicks,
+media-gate changes or third-party main-document scripts were added. Popunder
+scripts remain inactive. Configuring Smartlink does not enable social bars.
+
+Live verification (2026-11-17): the deployment `.env`, running container and live
+homepage JSON all contained
+`https://ardance.org/4/8f1a3362d3c4d7c7e94598462b3d7fb7`; the old live HTML had
+**zero matching anchors** despite ads enabled. There were no per-bot Smartlink
+overrides. Therefore the missing control was an application integration gap,
+not a missing Docker variable. The source change must be rebuilt into the image
+before the live site renders the new anchor; it is server-rendered and has no
+JavaScript-cache dependency. Existing dynamic responses remain private/no-store.
+
+Provider type/approval could **not** be authenticated. A real GET of this endpoint
+returned HTTP 200, `text/html`, **zero bytes**, no redirects. A fresh Chromium
+session using the actual rendered landing template made no destination request
+before interaction; clicking Sponsored link navigated in the same tab, sent no
+referrer, and also received HTTP 200 with an empty HTML body and no redirect.
+This proves user-initiated navigation, not advertising delivery or approval.
+The endpoint was not observed delivering JavaScript, but an empty response cannot
+prove its ad-format identity. Its path must not be automatically interpreted as
+banner, Social Bar or Popunder code.
+
+For Adsterra, the [official Direct Link guide](https://adsterra.com/blog/guide-for-working-with-direct-links/)
+uses a URL in an anchor. Confirm the actual publisher's Smartlinks/Direct Links
+entry is **Active**, its registered website is correct if domain-bound, and GET
+CODE provides this exact URL as an `href` destination. If it provides a script
+`src` instead, obtain an actual Direct Link; leave other formats in their separate
+settings. If the destination/code/status match but it still returns empty HTML,
+ask provider support to investigate delivery restrictions/account eligibility.
+No provider, keys or production `.env` values were changed. Banner no-fill is a
+separate unresolved provider issue.
+
+Validation: **25 tests passed** with the local MP4 fixture. New tests execute the
+actual configuration parsers and ad class; cover global/admin/per-bot precedence,
+missing/unsafe URLs, page placement, no unrelated format enablement, keyboard
+navigation, no automatic requests/popups/referrer/token appending, independent
+Download errors and Android Chrome emulation plus desktop. Existing streaming,
+VLC preparation, Video.js playback, themes, Anti-AdBlock and banner regressions
+remain covered. UI screenshots were checked in Chromium; physical Android and
+Telegram were not tested. Mock destination navigation is distinct from the real
+empty provider response above. No application deployment, commit or push was
+performed for this change.
+
+Apply the source changes from the deployment checkout:
+
+```bash
+cd ~/deploy/f2lv2bot-dev
+sudo docker compose up -d --build --force-recreate filestreambot
+sudo docker compose logs --tail=100 filestreambot
+```
 
 Anti-adblock on file/folder pages checks only whether a local bait element is
 hidden. A positive result pauses optional access actions and offers allowlist,

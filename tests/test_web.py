@@ -442,3 +442,57 @@ async def test_v3_folder_metadata_and_safe_error_states():
         page = await e.render['render_public_error_page']('Unavailable', 'Ask the sender.', reason=reason)
         assert expected in page
         assert 'secret database error' not in page
+
+
+@pytest.mark.asyncio
+async def test_smartlink_configuration_precedence_and_rendering():
+    from web_fixtures import web_ads_settings
+    url = 'https://ardance.org/4/8f1a3362d3c4d7c7e94598462b3d7fb7'
+    e = environment(True)
+    ads = web_ads_settings({'WEB_ADS_ENABLED': 'True', 'WEB_ADS_SMARTLINK_URL': url})
+    e.render['WebAds'] = ads
+    assert ads.SMARTLINK_URL == url
+    assert ads.template_context()['smartlink_url'] == url
+    html = await e.render['render_public_page']('public-file', session_id='session')
+    assert html.count('data-sponsored-link') == 1
+    assert f'href="{url}"' in html
+    assert 'rel="sponsored nofollow noopener noreferrer"' in html
+    assert 'referrerpolicy="no-referrer"' in html
+    assert 'target="_blank"' not in html[html.index('data-sponsored-link'):html.index('data-sponsored-link') + 250]
+    assert not ads.template_context()['has_any_social_bar']
+    assert 'Sponsored link' in await e.render['render_landing_page'](bot=e.bot)
+    folder = await e.render['render_folder']('folder', folder_doc=dict(files=[]), public_link=dict(public_id='folder'))
+    assert folder.count('data-sponsored-link') == 1
+    e.db.get_web_ads_status.return_value = False
+    assert 'data-sponsored-link' not in await e.render['render_public_page']('public-file', session_id='session')
+    e.db.get_web_ads_status.return_value = True
+    ads.ENABLED = False
+    assert not (await e.render['_template_context']())['ad_config']['smartlink_url']
+    assert 'data-sponsored-link' not in await e.render['render_public_page']('public-file', session_id='session')
+
+    ads = web_ads_settings({'WEB_ADS_SMARTLINK_URL': url}, {2: {'WEB_ADS_SMARTLINK_URL': 'https://ads.test/bot'}})
+    bot = SimpleNamespace(client_index=2)
+    assert ads.template_context(bot=bot)['smartlink_url'] == 'https://ads.test/bot'
+    assert ads.template_context()['smartlink_url'] == url
+    ads.BOT_OVERRIDES[2]['WEB_ADS_SMARTLINK_URL'] = ''
+    assert not ads.template_context(bot=bot)['smartlink_url']
+    ads.BOT_OVERRIDES[2].update(WEB_ADS_ENABLED='False', WEB_ADS_SMARTLINK_URL=url)
+    assert not ads.template_context(enabled_override=True, bot=bot)['smartlink_url']
+    assert not web_ads_settings().template_context()['smartlink_url']
+
+
+@pytest.mark.asyncio
+async def test_smartlink_unsafe_or_missing_destinations_are_not_rendered():
+    from web_fixtures import web_ads_settings
+    e = environment(True)
+    for url in ['', 'javascript:alert(1)', 'data:text/html,test', '//ads.test/', 'http://ads.test/',
+                'https://user:pass@ads.test/', 'https://ads.test:bad/', 'https://[broken/',
+                'https://ads.test\\@evil.test/', 'https://ads.test/\nunsafe', 'https://ads.test/space here']:
+        e.render['WebAds'] = web_ads_settings({'WEB_ADS_SMARTLINK_URL': url})
+        context = await e.render['_template_context']()
+        assert context['ad_config']['enabled']
+        assert not context['ad_config']['smartlink_url'], url
+        html = await e.render['render_public_page']('public-file', session_id='session')
+        assert 'data-sponsored-link' not in html
+        assert 'data-action="download"' in html
+        assert 'data-ad-placement="top"' in html

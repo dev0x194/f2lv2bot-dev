@@ -518,3 +518,7 @@ dialog::backdrop { background:#0009; backdrop-filter:blur(5px); } body:has(dialo
 @media(max-width:560px) { .header-bot {display:none} .header-actions {gap:.3rem} .site-header {border-radius:0} .features,.file-grid {grid-template-columns:1fr} .hero h1 {font-size:clamp(2.2rem,10vw,3.3rem)} .hero {padding-top:2rem} .split {padding-block:2rem} dialog {margin:auto 0 0;width:100%;max-width:100%;max-height:88dvh;border-radius:20px 20px 0 0;padding:1.2rem;padding-bottom:max(1.2rem,env(safe-area-inset-bottom))} .folder-toolbar > label:last-child {flex:1 1 100%} .file-page .actions > * {flex:1 1 100%} }
 
 .toast input { display:block; width:100%; margin-top:.6rem; }
+
+/* Optional navigation ad, kept separate from banner delivery and file actions. */
+.sponsored-link { margin: 1.5rem auto; padding-block: 1rem; border-block: 1px solid var(--line); }
+.sponsored-link .metadata { margin-bottom: 0; }

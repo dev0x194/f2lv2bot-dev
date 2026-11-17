@@ -6,8 +6,7 @@
   if (!config.enabled) return;
   if (node.dataset.initialized) return;
   node.dataset.initialized = "true";
-  const mobile = matchMedia("(max-width: 767px)").matches;
-  const device = mobile ? config.mobile : config.desktop;
+  const viewport = matchMedia("(max-width: 767px)");
   const safeUrl = (value) => {
     try {
       const url = new URL(value);
@@ -26,14 +25,24 @@
     const label = document.createElement("span");
     label.className = "ad-label";
     label.textContent = "Advertisement";
+    // Keep initialized documents attached: detaching/reinserting iframes reloads them.
+    let active = false;
+    let state = "loading";
+    const renderState = () => {
+      const visible = active && !["error", "empty", "slow-unverified"].includes(state);
+      label.hidden = !visible;
+      frame.hidden = !visible;
+      if (!active) return;
+      placement.dataset.adState = state;
+      placement.classList.toggle("loaded", visible);
+    };
     // Provider script failure/outage is unknown, never evidence of an ad blocker.
     let timeout;
     const fail = (reason) => {
       clearTimeout(timeout);
       frame.remove();
-      label.hidden = true;
-      placement.classList.remove("loaded");
-      placement.dataset.adState = reason;
+      state = reason;
+      renderState();
       console.info("[FileStream ads]", placement.dataset.adPlacement || "social", reason);
       window.removeEventListener("message", listener);
     };
@@ -43,15 +52,15 @@
       if (event.data.state === "content") {
         clearTimeout(timeout);
         // Content was inserted; cross-origin creative fill remains unverifiable.
-        placement.classList.add("loaded");
-        placement.dataset.adState = "content-unverified";
+        state = "content-unverified";
+        renderState();
       }
     };
     window.addEventListener("message", listener);
     // A timeout does not prove blocking or no-fill. Late provider content may still appear.
     timeout = setTimeout(() => {
-      placement.classList.remove("loaded");
-      placement.dataset.adState = "slow-unverified";
+      state = "slow-unverified";
+      renderState();
       console.info("[FileStream ads] slow provider; fill unknown");
     }, 30000);
     const encode = (text) =>
@@ -74,10 +83,11 @@
       '<\/script><script src="' +
       encode(url) +
       "\" onload=\"setTimeout(()=>parent.postMessage({type:'filestream-ad',state:hasContent()?'content':'empty'},'*'),60000)\" onerror=\"parent.postMessage({type:'filestream-ad',state:'error'},'*')\"><\/script></body></html>";
+    label.hidden = true;
+    frame.hidden = true;
     placement.append(label, frame);
-    placement.classList.add("loaded");
     const fit = () => {
-      if (typeof width !== "number") return;
+      if (!active || !placement.clientWidth || typeof width !== "number") return;
       const scale = Math.min(1, placement.clientWidth / width);
       frame.style.maxWidth = "none";
       frame.style.transformOrigin = "top left";
@@ -86,35 +96,55 @@
       frame.style.marginLeft = `${Math.max(0, (placement.clientWidth - width * scale) / 2)}px`;
     };
     new ResizeObserver(fit).observe(placement);
-    fit();
+    return {
+      activate(value) {
+        active = value;
+        renderState();
+        fit();
+      },
+    };
   }
-  // Choose placements once per page; resizing never initializes the shared unit twice.
-  for (const placement of document.querySelectorAll("[data-ad-placement]")) {
-    const slot =
-      placement.dataset.adPlacement === "top"
-        ? device.top_banner
-        : mobile
-          ? device.bottom_banner
-          : device.inline_banner;
-    if (!slot || !slot.enabled || !slot.key || !(slot.width > 0 && slot.height > 0)) continue;
-    const url = safeUrl(slot.invoke_url);
-    if (!url) continue;
-    mount(placement, url, slot.width, slot.height, {
-      key: slot.key,
-      format: "iframe",
-      height: slot.height,
-      width: slot.width,
-      params: {},
-    });
-  }
+  const placements = Array.from(document.querySelectorAll("[data-ad-placement]"),
+    (element) => ({ element, units: new Map() }));
+  const selectBanners = () => {
+    const mobile = viewport.matches;
+    const device = mobile ? config.mobile : config.desktop;
+    for (const { element, units } of placements) {
+      for (const unit of units.values()) unit.activate(false);
+      element.classList.remove("loaded");
+      element.dataset.adDevice = mobile ? "mobile" : "desktop";
+      element.dataset.adState = "disabled";
+      const slot = element.dataset.adPlacement === "top"
+        ? device.top_banner : mobile ? device.bottom_banner : device.inline_banner;
+      if (!slot || !slot.enabled || !slot.key || !(slot.width > 0 && slot.height > 0)) continue;
+      const url = safeUrl(slot.invoke_url);
+      if (!url) continue;
+      // Identical 300x250 configurations share one document across breakpoints;
+      // independent keys/URLs/dimensions retain their own document and options.
+      const identity = JSON.stringify([slot.key, url, slot.width, slot.height]);
+      if (!units.has(identity)) {
+        units.set(identity, mount(element, url, slot.width, slot.height, {
+          key: slot.key,
+          format: "iframe",
+          height: slot.height,
+          width: slot.width,
+          params: {},
+        }));
+      }
+      units.get(identity).activate(true);
+    }
+  };
+  selectBanners();
+  viewport.addEventListener("change", selectBanners);
+  const device = viewport.matches ? config.mobile : config.desktop;
   const social = safeUrl(device.social_bar_url);
   if (social) {
     const placement = document.createElement("aside");
     placement.className = "ad-placement ad-social";
     placement.setAttribute("aria-label", "Advertisement");
     document.querySelector("main").append(placement);
-    mount(placement, social, "100%", 60, null);
+    mount(placement, social, "100%", 60, null).activate(true);
   }
-  // Smartlinks and popunder scripts are deliberately not executed. No site policy
-  // permits popunders, and core actions should complete without extra windows.
+  // Smartlinks are optional server-rendered anchors, never scripts or media gates.
+  // Popunder scripts remain inactive; core actions do not open advertising windows.
 })();

@@ -439,7 +439,7 @@ class WebAds:
     )
     SMARTLINK_URL = _str_env(
         "WEB_ADS_SMARTLINK_URL",
-        "https://cardinaltangible.com/jpxjm6h69?key=654ea398985fb67f67bc8d74aecdedcf",
+        "",
     )
     POPUNDER_URL = _str_env(
         "WEB_ADS_POPUNDER_URL",
@@ -541,6 +541,28 @@ class WebAds:
             "enabled": enabled,
         }
 
+    @staticmethod
+    def _validated_smartlink_url(value) -> str:
+        """Validate a trusted administrator's external navigation destination.
+
+        Never fetch the destination server-side or execute it as a script.
+        """
+        from urllib.parse import urlsplit
+        value = str(value or "").strip()
+        if not value or any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c == "\\" for c in value):
+            return ""
+        try:
+            parsed = urlsplit(value)
+            if parsed.scheme != "https" or not parsed.hostname or parsed.username is not None or parsed.password is not None:
+                return ""
+            parsed.port  # Invalid ports must not reach the browser.
+            host = parsed.hostname.encode("idna").decode("ascii")
+            if any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-" for c in host):
+                return ""
+        except (ValueError, UnicodeError):
+            return ""
+        return value
+
     @classmethod
     def template_context(cls, enabled_override: bool | None = None, *, bot=None) -> dict:
         configured_enabled = bool(cls.ENABLED) and bool(cls._resolve_attr("ENABLED", bot=bot))
@@ -595,7 +617,7 @@ class WebAds:
                 "bottom_banner": mobile_bottom,
                 "social_bar_url": mobile_social_bar_url,
             },
-            "smartlink_url": cls._resolve_attr("SMARTLINK_URL", bot=bot) if enabled_flag else "",
+            "smartlink_url": cls._validated_smartlink_url(cls._resolve_attr("SMARTLINK_URL", bot=bot)) if enabled_flag else "",
             "popunder_url": cls._resolve_attr("POPUNDER_URL", bot=bot) if enabled_flag else "",
             "has_any_banner": any(
                 slot["enabled"] for slot in (desktop_top, desktop_inline, mobile_top, mobile_bottom)
