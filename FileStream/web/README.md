@@ -133,15 +133,27 @@ settings share one document across breakpoints, while independent configurations
 remain independent. Failed units are retained as failed records and are not retried.
 Hidden units' delayed messages cannot change the active unit's visibility/state.
 
-Invocation URLs are HTTPS JavaScript resources, not iframe destinations. Each
-opaque-origin sandboxed `srcdoc` document defines its own `atOptions` before a
-parser-inserted provider script; this supports `document.write` without global
-key races. Scripts cannot read page cookies, DOM or media capabilities. Do not
-add `allow-same-origin` to these same-origin `srcdoc` frames. Providers requiring
-parent-page access, storage or top navigation are not supported by this isolated
-integration; use a provider-supported isolated embed on a separate origin rather
-than removing the security boundary. No production compatibility claim is made
-for such providers.
+Banners now navigate regular cross-origin iframes to fixed documents on
+`WEB_ADS_DOCUMENT_ORIGIN` (for production, `https://ads.tdrp.cc`). That origin must
+be distinct from FileStream and have ongoing DNS, TLS and a separately operated
+static ad service. There is no same-origin/srcdoc fallback for banners. Each
+minimal document defines its own `atOptions` before a parser-inserted invocation,
+with normal origin referrers and support for `document.write`. Only the public
+slot configuration is exported; the service receives no application credentials.
+App-to-ad referrers are reduced to origin, and postMessages require exact origin
+and frame identity. HTTPS session cookies use the `__Host-` prefix with no Domain.
+The ad endpoint rejects protected credential-cookie names, including legacy and
+domain-wide FileStream cookies, while permitting ordinary advertising cookies.
+Cookie values are neither authenticated, reflected nor forwarded by the service.
+
+See [ad-service operations and security](../../deploy/ads/README.md) for the export,
+isolated Docker service, egress filter, deployment/rollback and real-browser
+release gate. The template/admin flow remains unchanged. The confirmed Android
+F result established the architecture; the owner now reports real integrated
+cookie-fix creatives for all four placements and successful navigation in two
+additional recordings. See the precise coverage and remaining
+physical checks in [the validation record](../../deploy/ads/VALIDATION.md). Historical investigation
+notes below describe earlier code and are not the current deployment recipe.
 
 Social bars require `WEB_ADS_SOCIAL_BAR_ENABLED=True` (default False) in addition
 to an active device URL and the global/admin switches. A URL alone does not enable

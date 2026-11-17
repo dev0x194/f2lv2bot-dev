@@ -20,8 +20,11 @@
     frame.title = "Advertisement";
     frame.width = width;
     frame.height = height;
-    frame.sandbox = "allow-scripts allow-popups";
-    frame.referrerPolicy = "no-referrer";
+    const banner = Boolean(options);
+    const messageOrigin = banner ? new URL(url).origin : "null";
+    if (!banner) frame.sandbox = "allow-scripts allow-popups";
+    frame.referrerPolicy = banner ? "origin" : "no-referrer";
+    frame.allow = "camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'; usb 'none'";
     const label = document.createElement("span");
     label.className = "ad-label";
     label.textContent = "Advertisement";
@@ -49,7 +52,8 @@
       if (reason === "error") window.removeEventListener("message", listener);
     };
     const listener = (event) => {
-      if (event.source !== frame.contentWindow || event.data?.type !== "filestream-ad") return;
+      if (event.source !== frame.contentWindow || event.origin !== messageOrigin || event.data?.type !== "filestream-ad") return;
+      // Diagnostic runtime-error messages are nonterminal: a creative may still work.
       if (event.data.state === "error" || event.data.state === "empty") fail(event.data.state);
       if (event.data.state === "content") {
         clearTimeout(timeout);
@@ -65,26 +69,26 @@
       renderState();
       console.info("[FileStream ads] slow provider; fill unknown");
     }, 30000);
-    const encode = (text) =>
-      text.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-    const setup = options
-      ? "var atOptions=" +
-        JSON.stringify(options).replace(/</g, "\\u003c") +
-        ";"
-      : "";
-    // Keep invocation in BODY, as required by banner integrations. Parser insertion
-    // preserves document.write ordering; the opaque origin protects page tokens/cookies.
-    frame.srcdoc =
-      '<!doctype html><html><head><meta name="referrer" content="no-referrer"><style>body{margin:0;overflow:hidden}</style></head><body><script>' +
-      setup +
-      "const report=state=>parent.postMessage({type:'filestream-ad',state},'*');" +
-      "const hasContent=()=>{if(document.querySelector('iframe,img,video,object'))return true;if(!document.body)return false;" +
-      "const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let text;while(text=walker.nextNode()){if(text.textContent.trim()&&!text.parentElement.closest('script,style,template,noscript'))return true;}return false;};" +
-      "const check=()=>{if(hasContent()) report('content');};" +
-      "new MutationObserver(check).observe(document.documentElement,{childList:true,subtree:true});" +
-      '<\/script><script src="' +
-      encode(url) +
-      "\" onload=\"setTimeout(()=>parent.postMessage({type:'filestream-ad',state:hasContent()?'content':'empty'},'*'),60000)\" onerror=\"parent.postMessage({type:'filestream-ad',state:'error'},'*')\"><\/script></body></html>";
+    if (banner) {
+      // Regular navigation preserves the provider's origin/referrer behavior.
+      // A distinct origin, not a same-origin sandbox exemption, protects the app.
+      frame.src = url;
+    } else {
+      // Optional Social Bar keeps its existing opaque sandbox, independently of banners.
+      const encode = (text) =>
+        text.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+      // Optional Social Bar remains parser-inserted inside its opaque document.
+      frame.srcdoc =
+        '<!doctype html><html><head><meta name="referrer" content="no-referrer"><style>body{margin:0;overflow:hidden}</style></head><body><script>' +
+        "const report=state=>parent.postMessage({type:'filestream-ad',state},'*');" +
+        "const hasContent=()=>{if(document.querySelector('iframe,img,video,object'))return true;if(!document.body)return false;" +
+        "const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let text;while(text=walker.nextNode()){if(text.textContent.trim()&&!text.parentElement.closest('script,style,template,noscript'))return true;}return false;};" +
+        "const check=()=>{if(hasContent()) report('content');};" +
+        "new MutationObserver(check).observe(document.documentElement,{childList:true,subtree:true});" +
+        '<\/script><script src="' +
+        encode(url) +
+        "\" onload=\"setTimeout(()=>parent.postMessage({type:'filestream-ad',state:hasContent()?'content':'empty'},'*'),60000)\" onerror=\"parent.postMessage({type:'filestream-ad',state:'error'},'*')\"><\/script></body></html>";
+    }
     label.hidden = true;
     frame.hidden = true;
     placement.append(label, frame);
@@ -119,8 +123,13 @@
       const slot = element.dataset.adPlacement === "top"
         ? device.top_banner : mobile ? device.bottom_banner : device.inline_banner;
       if (!slot || !slot.enabled || !slot.key || !(slot.width > 0 && slot.height > 0)) continue;
-      const url = safeUrl(slot.invoke_url);
+      const url = safeUrl(slot.document_url);
       if (!url) continue;
+      const documentUrl = new URL(url);
+      // Reject same-origin documents, arbitrary routes, query strings and fragments.
+      if (documentUrl.hostname === location.hostname ||
+          !/^\/banner\/[a-f0-9]{64}\.html$/.test(documentUrl.pathname) ||
+          documentUrl.search || documentUrl.hash) continue;
       // Identical 300x250 configurations share one document across breakpoints;
       // independent keys/URLs/dimensions retain their own document and options.
       const identity = JSON.stringify([slot.key, url, slot.width, slot.height]);

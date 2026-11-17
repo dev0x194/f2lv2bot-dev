@@ -7,6 +7,8 @@ import ast
 import asyncio
 import contextlib
 import json
+import importlib.util
+import sys
 import logging
 import math
 import mimetypes
@@ -24,6 +26,18 @@ import jinja2
 from aiohttp import web
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_public_module(name, relative):
+    """Load dependency-free public helpers without FileStream's dotenv initializer."""
+    spec = importlib.util.spec_from_file_location(name, ROOT / relative)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+load_public_module("FileStream.web.ad_documents", "FileStream/web/ad_documents.py")
 
 
 def load_functions(relative, names=None, **bindings):
@@ -56,7 +70,7 @@ def ads_config(enabled=False, smartlink_url="https://ads.test/smart"):
             invoke_url=f"https://ads.test/{key}.js",
         )
 
-    return dict(
+    config = dict(
         enabled=enabled,
         adblock_enabled=True,
         desktop=dict(
@@ -72,6 +86,33 @@ def ads_config(enabled=False, smartlink_url="https://ads.test/smart"):
         smartlink_url=smartlink_url if enabled else "",
         popunder_url="",
     )
+
+    configure_ad_documents(config)
+    return config
+
+
+def configure_ad_documents(config):
+    from FileStream.web.ad_documents import document_url
+    for device in ("desktop", "mobile"):
+        for slot in config[device].values():
+            if isinstance(slot, dict):
+                slot["document_url"] = document_url("https://ad-documents.test", slot)
+
+
+async def route_ad_documents(context, config):
+    """Use actual exported HTML; translate only the loopback test parent origin."""
+    from FileStream.web.ad_documents import render_document
+    async def document(route):
+        slots = [s for d in ("desktop", "mobile") for s in config[d].values() if isinstance(s, dict)]
+        slot = next((s for s in slots if s.get("document_url") == route.request.url), None)
+        if slot is None:
+            await route.fulfill(status=404, body="Unknown slot")
+            return
+        parent = urllib.parse.urlsplit(route.request.frame.parent_frame.url)
+        origin = parent.scheme + "://" + parent.netloc
+        html = render_document(slot, ["https://app.test"]).replace("https://app.test", origin)
+        await route.fulfill(content_type="text/html", body=html, headers={"Referrer-Policy":"strict-origin-when-cross-origin"})
+    await context.route("https://ad-documents.test/**", document)
 
 
 def environment(enabled=False):
@@ -205,6 +246,6 @@ def web_ads_settings(values=None, bot_overrides=None):
     nodes = [node for node in tree.body if
              isinstance(node, ast.FunctionDef) and node.name in {'_bool_env', '_int_env', '_str_env'}
              or isinstance(node, ast.ClassDef) and node.name == 'WebAds']
-    namespace = dict(env=values or {}, _BOT_WEB_AD_OVERRIDES=bot_overrides or {})
+    namespace = dict(env={"WEB_ADS_DOCUMENT_ORIGIN": "https://ad-documents.test", **(values or {})}, _BOT_WEB_AD_OVERRIDES=bot_overrides or {})
     exec(compile(ast.Module(body=nodes, type_ignores=[]), 'config.py', 'exec'), namespace)
     return namespace['WebAds']

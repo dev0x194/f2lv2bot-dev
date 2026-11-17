@@ -77,7 +77,9 @@ routes = web.RouteTableDef()
 db = Database(Telegram.DATABASE_URL, Telegram.SESSION_NAME)
 TELEGRAM_GETFILE_LIMIT = 1024 * 1024
 _OBJECT_ID_RE = re.compile(r"^[0-9a-fA-F]{24}$")
-PAGE_SESSION_COOKIE = "fs_page_session"
+# A sibling advertising origin must not be able to overwrite the app session
+# using a Domain=.example.com cookie. Secure browsers enforce this prefix.
+PAGE_SESSION_COOKIE = "__Host-fs_page_session" if Server.HAS_SSL else "fs_page_session"
 PAGE_SESSION_TTL = 60 * 60 * 12
 
 class_cache: dict = {}

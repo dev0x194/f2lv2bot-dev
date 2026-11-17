@@ -392,6 +392,8 @@ class Server:
 
 class WebAds:
     ENABLED = _bool_env("WEB_ADS_ENABLED", True)
+    # Required for banner delivery. Never fall back to executing ads in the app.
+    DOCUMENT_ORIGIN = _str_env("WEB_ADS_DOCUMENT_ORIGIN", "")
     BOT_OVERRIDES = _BOT_WEB_AD_OVERRIDES
     BOT_DEFAULT_POPUNDER_URLS = {
         1: "https://cardinaltangible.com/63/ab/3d/63ab3df91686bbebb1c3ae1ef956f7b4.js",
@@ -531,13 +533,20 @@ class WebAds:
             parsed.port  # Reject malformed ports as well.
         except ValueError:
             valid_url = False
-        enabled = enabled_flag and bool(key) and valid_url and 0 < width <= 4096 and 0 < height <= 4096
+        from FileStream.web.ad_documents import document_url
+        try:
+            ad_document_url = document_url(cls.DOCUMENT_ORIGIN, dict(
+                key=key, width=width, height=height, invoke_url=invoke_url))
+        except (ValueError, TypeError):
+            ad_document_url = ""
+        enabled = enabled_flag and bool(key) and valid_url and bool(ad_document_url) and 0 < width <= 4096 and 0 < height <= 4096
         return {
             "device": device,
             "key": key,
             "width": int(width or 0),
             "height": int(height or 0),
             "invoke_url": invoke_url,
+            "document_url": ad_document_url,
             "enabled": enabled,
         }
 

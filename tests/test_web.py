@@ -267,7 +267,7 @@ def test_ad_configuration_global_switch_and_independent_slots():
         _BOT_WEB_AD_OVERRIDES={},
         _bool_env=lambda key, default=False: default,
         _int_env=lambda key, default=0: default,
-        _str_env=lambda key, default="": default,
+        _str_env=lambda key, default="": "https://ad-documents.test" if key == "WEB_ADS_DOCUMENT_ORIGIN" else default,
     )
     exec(compile(ast.Module(body=[cls], type_ignores=[]), "config.py", "exec"), ns)
     ads = ns["WebAds"]
@@ -496,3 +496,53 @@ async def test_smartlink_unsafe_or_missing_destinations_are_not_rendered():
         assert 'data-sponsored-link' not in html
         assert 'data-action="download"' in html
         assert 'data-ad-placement="top"' in html
+
+
+def test_secure_page_cookie_is_host_only_and_cannot_be_tossed_by_ad_subdomain():
+    e = environment()
+    e.routes['Server'].HAS_SSL = True
+    tree = ast.parse((ROOT / 'FileStream/server/stream_routes.py').read_text())
+    assignment = next(n for n in tree.body if isinstance(n, ast.Assign)
+                      and any(isinstance(t, ast.Name) and t.id == 'PAGE_SESSION_COOKIE' for t in n.targets))
+    namespace = {'Server': e.routes['Server']}
+    exec(compile(ast.Module(body=[assignment], type_ignores=[]), 'cookies', 'exec'), namespace)
+    assert namespace['PAGE_SESSION_COOKIE'] == '__Host-fs_page_session'
+    e.routes['PAGE_SESSION_COOKIE'] = namespace['PAGE_SESSION_COOKIE']
+    response = web.Response()
+    e.routes['_issue_page_session_cookie'](response, 'test-session')
+    cookie = response.cookies['__Host-fs_page_session']
+    assert cookie['secure'] and cookie['httponly']
+    assert cookie['path'] == '/' and cookie['domain'] == ''
+    assert cookie['samesite'] == 'Lax'
+    # Audit every application set_cookie call, not just this response.
+    for path in (ROOT / 'FileStream').rglob('*.py'):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'set_cookie':
+                assert not any(k.arg == 'domain' for k in node.keywords), path
+
+
+@pytest.mark.asyncio
+async def test_https_cookie_migration_preserves_authorized_stream_and_download_issuance():
+    import re
+    e = environment()
+    e.routes['Server'].HAS_SSL = True
+    e.routes['PAGE_SESSION_COOKIE'] = '__Host-fs_page_session'
+    app = web.Application()
+    for path, name in [('/gen/{public_id}', 'gen_handler'),
+                       ('/get-stream-token/{path}', 'get_stream_token_handler'),
+                       ('/get-download-token/{path}', 'get_download_token_handler')]:
+        app.router.add_get(path, e.routes[name])
+    async with TestClient(TestServer(app)) as client:
+        page = await client.get('/gen/public-file')
+        cookie = page.cookies['__Host-fs_page_session']
+        assert cookie['secure'] and cookie['httponly'] and not cookie['domain']
+        cfg = json.loads(re.search(r'id="file-config">(.*?)</script>', await page.text(), re.S).group(1))
+        client.session.cookie_jar.clear()
+        # Transport is local HTTP; explicit headers model the HTTPS cookie sent by Chrome.
+        headers = {'X-Page-Token': cfg['pageToken'], 'Cookie': 'fs_page_session='+cookie.value}
+        assert (await client.get('/get-stream-token/public-file', headers=headers)).status == 403
+        headers['Cookie'] = '__Host-fs_page_session='+cookie.value
+        stream = await client.get('/get-stream-token/public-file', headers=headers)
+        download = await client.get('/get-download-token/public-file', headers=headers)
+        assert stream.status == 200 and (await stream.json())['success']
+        assert download.status == 200 and '/file/' in (await download.json())['download_url']
