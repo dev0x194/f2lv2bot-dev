@@ -109,12 +109,12 @@ def test_public_export_exact_slots_and_no_credentials(tmp_path):
 
 
 def test_ad_service_has_no_application_or_proxy_network_mounts():
-    text = (ROOT / "docker-compose.ads.yml").read_text()
-    service = text.split("  ad-documents:\n", 1)[1].split("\nnetworks:", 1)[0]
+    text = (ROOT / "docker-compose.yml").read_text()
+    service = text.split("\n  ad-documents:\n", 1)[1].split("\n  traefik:", 1)[0]
     assert "env_file:" not in service and "environment:" not in service
     assert "docker.sock" not in service and "/app" not in service
     assert "sessions" not in service and "database" not in service
-    assert "      - proxy" not in service and "external: true" in text
+    assert "      - proxy" not in service and "internal: true" in text
     assert "security_opt:" in service
     assert "connect" in (ROOT / "deploy/ads/no-egress.c").read_text()
     assert "cap_drop: [ALL]" in service and "read_only: true" in service

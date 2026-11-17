@@ -18,7 +18,14 @@ from FileStream.web.ad_documents import (
 )
 
 
-def export_documents(settings, output, parent_origins, sensitive_cookie_names=()):
+def export_documents(
+    settings,
+    output,
+    parent_origins,
+    sensitive_cookie_names=(),
+    document_root="/usr/share/nginx/html",
+    release_id="ok",
+):
     cookie_pattern = sensitive_cookie_pattern(sensitive_cookie_names)
     origin = https_origin(settings.DOCUMENT_ORIGIN)
     parents = sorted({https_origin(p) for p in parent_origins})
@@ -63,6 +70,8 @@ def export_documents(settings, output, parent_origins, sensitive_cookie_names=()
         )
     )
     config = (Path(__file__).resolve().parents[3] / "deploy/ads/nginx.conf").read_text()
+    config = config.replace("/usr/share/nginx/html", document_root)
+    config = config.replace('200 "ok\\n"', '200 "' + release_id + '\\n"')
     config = config.replace("__PARENT_ORIGINS__", " ".join(parents))
     config = config.replace("__SENSITIVE_COOKIE_PATTERN__", cookie_pattern)
     (output / "nginx.conf").write_text(config)

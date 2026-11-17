@@ -27,74 +27,33 @@ A powerful, high-performance Telegram bot that streams files directly from Teleg
 
 ## 🛠 Deployment
 
-You can deploy this bot on Heroku, Render, VPS, or locally.
+Install Docker Engine with the Compose plugin on Ubuntu. Point the application
+and advertisement DNS names at the server; allow inbound TCP 80/443 and outbound
+Telegram/MongoDB/ACME access. Configure a working ACME email and distinct HTTPS
+advertisement origin in `.env`. Keep `.env` private (mode 600).
 
-### ⚡ One-Click Deploy (Heroku)
+```bash
+git clone <repository-url>
+cd f2lv2bot-dev
+git switch dev
+cp example.env .env
+nano .env
+sudo docker compose up -d --build
+```
 
-[![Deploy on Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Avipatilpro/FileStreamBot)
+Updates use the same Compose file:
 
-### 🐳 Deploy with Docker
+```bash
+git pull --ff-only origin dev
+sudo docker compose up -d --build
+```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/avipatilpro/FileStreamBot
-    cd FileStreamBot
-    ```
-
-2.  **Build the image:**
-    ```bash
-    docker build -t file-stream .
-    ```
-
-3.  **Run the container:**
-    ```bash
-    docker run -d --restart unless-stopped --name fsb \
-      -v $(pwd)/.env:/app/.env \
-      -p 8080:8080 \
-      file-stream
-    ```
-
-### 🔒 Deploy with Docker Compose + Traefik SSL
-
-1.  **Point DNS to your VPS:**
-    Create an `A`/`AAAA` record for your domain, for example `files.example.com`, pointing to the server that will run Docker.
-
-2.  **Configure environment:**
-    ```bash
-    cp example.env .env
-    nano .env
-    ```
-
-    Set at least `FQDN`, `ACME_EMAIL`, and the required Telegram/MongoDB variables. For Traefik, keep `FQDN` as a bare host such as `files.example.com`; the Compose defaults map `FILESTREAM_HAS_SSL=True` and `FILESTREAM_NO_PORT=True` into the app container.
-
-3.  **Start the stack:**
-    ```bash
-    docker compose up -d --build
-    ```
-
-    Traefik listens on ports `80` and `443`, redirects HTTP to HTTPS, and requests a Let's Encrypt certificate for `FQDN`.
-
-### 🖥️ Local / VPS Deployment
-
-1.  **Clone and install dependencies:**
-    ```bash
-    git clone https://github.com/avipatilpro/FileStreamBot
-    cd FileStreamBot
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-    ```
-
-2.  **Configure environment:**
-    ```bash
-    cp example.env .env
-    nano .env  # Add your variables
-    ```
-
-3.  **Run the bot:**
-    ```bash
-    python3 -m FileStream
-    ```
+`ad-export` validates configuration, generates public documents inside Docker,
+and exits successfully. Only FileStream, hardened advertisement Nginx and Traefik
+remain running. No host Python, manual exports or host configuration mounts are
+needed. Both DNS records and the ad service are required for banner operation.
+See [deployment architecture and migration](deploy/ads/README.md) before updating
+an existing multi-file installation. Never use `down -v` on an installation.
 
 ## ⚙️ Environment Variables
 
@@ -133,7 +92,7 @@ Create a `.env` file with the following (or set them in your cloud provider):
 - `STREAM_CACHE_TTL_HOURS`: How long cached chunks stay valid before pruning (Default: `24`).
 - `SESSION_NAME`: Mongo database/session namespace (Default: `FileStream`).
 - `ACME_EMAIL`: Email address used by Traefik/Let's Encrypt when deploying with `docker-compose.yml`.
-- `TRAEFIK_IMAGE`: Traefik image tag used by Compose (Default: `traefik:v3.1`).
+- Traefik uses the `traefik:v3` image specified in the canonical Compose file.
 - `TRAEFIK_NETWORK`: Docker network name shared by Traefik and the bot (Default: `filestreambot-proxy`).
 - `TRAEFIK_CERT_RESOLVER`: Traefik certificate resolver name (Default: `letsencrypt`).
 - `TRAEFIK_HTTP_PORT`, `TRAEFIK_HTTPS_PORT`: Host ports published by Traefik (Defaults: `80`, `443`).

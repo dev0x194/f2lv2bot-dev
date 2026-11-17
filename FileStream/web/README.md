@@ -146,6 +146,7 @@ The ad endpoint rejects protected credential-cookie names, including legacy and
 domain-wide FileStream cookies, while permitting ordinary advertising cookies.
 Cookie values are neither authenticated, reflected nor forwarded by the service.
 
+Use the single root Compose file for installation and updates; export is automatic.
 See [ad-service operations and security](../../deploy/ads/README.md) for the export,
 isolated Docker service, egress filter, deployment/rollback and real-browser
 release gate. The template/admin flow remains unchanged. The confirmed Android
@@ -216,12 +217,14 @@ test router before starting the application (run from the repository root):
 
 ```sh
 sudo docker compose -f test/docker-compose.yml --env-file test/.env stop ad-test
-sudo docker compose build filestreambot
-sudo docker compose up -d --no-deps filestreambot
+sudo docker compose up -d --build
 ```
 
-These commands leave Traefik, certificates and persistent volumes intact. Do not
-run `down -v`. Restoration/build was not executed as part of this investigation.
+This is a historical test-router restoration example. For an existing two-file
+installation, use the reviewed [migration procedure](../../deploy/ads/README.md)
+first: whole-stack startup recreates Traefik once to add the file provider.
+Preserve certificate/cache volumes; never run `down -v`. No restoration or
+migration was executed as part of this review.
 
 Regression validation: `WEB_MEDIA_FIXTURE=/tmp/filestream-test-trailer.mp4
 /tmp/filestream-web-venv/bin/python -m pytest -q` passes all 21 tests. Advertising
@@ -410,8 +413,7 @@ Global enable, per-bot `MULTI_TOKEN<n>_WEB_ADS_*` overrides and the persisted
 `/webads` or admin toggle must all permit banners. Keys and invocation URLs are
 public provider configuration, never bot/database/media credentials.
 
-Apply source/env changes with `docker compose up -d --build --force-recreate
-filestreambot` (a restart alone does not reload container environment).
+Apply source/env changes with `sudo docker compose up -d --build` (a restart alone does not reload container environment).
 Inspect `docker compose logs --tail=100 filestreambot` without dumping environment
 variables. In browser DevTools use Network to inspect invocation status, response
 body, blocked requests and subsequent creative requests; inspect Console for CSP,
@@ -500,7 +502,7 @@ Apply the source changes from the deployment checkout:
 
 ```bash
 cd ~/deploy/f2lv2bot-dev
-sudo docker compose up -d --build --force-recreate filestreambot
+sudo docker compose up -d --build
 sudo docker compose logs --tail=100 filestreambot
 ```
 

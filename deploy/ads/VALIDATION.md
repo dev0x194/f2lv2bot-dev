@@ -101,7 +101,9 @@ creative clicks, provider redirects, other physical browsers and production
 Telegram/MongoDB streaming are not claimed validated by these preview checks.
 DNS/TLS and the dedicated ad service remain required for ongoing operation.
 
-## Release state
+## Previous advertising release state (historical)
+
+The following describes the earlier preview release, not the current live inventory.
 
 The production FileStream bot has not been deployed or started. The Nginx test
 homepage, Traefik process/certificates and persistent volumes remain unchanged.
@@ -110,3 +112,84 @@ origin/dev after the final test/security review. That authorization does not
 permit merging main or deploying the production bot. The controlled preview
 remains available; unobserved physical restart/reload cases remain limitations,
 not claims of successful real-device tests.
+
+
+## Single-Compose deployment validation — 2026-11-17
+
+The new canonical root Compose deployment remains **uncommitted and unpushed**
+pending owner approval. No live container, certificate, volume or DNS migration
+was performed. Existing production containers were left running throughout.
+
+Full-suite command (test environment only):
+
+```sh
+RUN_COMPOSE_TESTS=1 \
+AD_SERVICE_TEST_IMAGE=filestream-ad-documents:local \
+AD_SERVICE_DOCKER='sudo -n docker' \
+WEB_MEDIA_FIXTURE=/tmp/filestream-test-trailer.mp4 \
+python -m pytest -q
+```
+
+Result: **54 passed, 1 skipped in 205.18 seconds**. The skipped test requires an
+explicitly selected approved HTTPS diagnostic preview (`AD_COOKIE_PREVIEW_URL`);
+it was not pointed at the current production application.
+
+The isolated Compose 5.7.1 rehearsal executes `up -d --build` using one canonical
+file, unique project/resources, no public ports and no Docker socket. It covers:
+
+- Fresh missing-credential failure blocking the app and ad service, then successful
+  one-shot export and healthy startup with synthetic credentials.
+- All four configured placement documents, named volume mounts, no application
+  credentials in ad runtime configuration, benign-cookie success and protected
+  credential-cookie rejection.
+- Repeat deployment, key/size changes, source rebuilds, return to earlier settings
+  with intervening banner URLs retained, disabled ads and recovery after failures.
+- Failed export preserving the selected known-good bundle; unchanged Traefik
+  container identity during ordinary updates.
+- Migration from a synthetic two-file/host-bundle layout, removal of the old
+  Docker-label ad router, preservation of certificate/cache volume markers and
+  byte-for-byte preservation of the old host bundle.
+
+Existing regression tests passed for responsive frames, cookie names/duplicates/
+shadowing, secure playback/downloads, Video.js, anti-adblock and the real Docker
+kernel egress restriction. The real application image built successfully; a
+separate network-disabled container check confirmed that its Python 3.11 startup
+guard accepts the exporter image's public bundle. That check executed only a
+harmless confirmation command, never the Telegram bot. `git diff --check` and a
+scan comparing modified/new sources against configured private credential values
+also passed without printing those values.
+
+This does not establish a fresh public ACME certificate, production Telegram/
+MongoDB connectivity, an actual EC2 migration or new Android creative delivery.
+The earlier physical Android evidence remains as recorded above; frontend ad
+rendering, cookie policy and provider invocation code were not changed by this
+orchestration work. Existing unknown parent-domain cookie and unobserved physical
+browser-restart limitations remain. Migration instructions are in README.md.
+
+### Final single-Compose review
+
+The review rerun completed with **54 passed, 1 skipped in 207.71 seconds** using
+`-rs` and the same opt-in Docker/browser suite settings above (ad security image:
+`filestream-ad-documents:review`). The skipped case is
+`tests/test_ad_cookie_browser.py::test_preview_ad_cookies_survive_reload_navigation_and_browser_restart`:
+no approved `AD_COOKIE_PREVIEW_URL` was supplied. It was not silently replaced by
+a production URL. Physical Android delivery/restart coverage is not extended by
+this rerun.
+
+The real application-image bundle compatibility check passed again with no
+network and a harmless command instead of bot startup. Compose configuration,
+Python formatting, diff whitespace and configured-credential scans passed.
+Both untracked files were reviewed: the deployment module and Compose rehearsal
+test. No private environment, session file or temporary diagnostic is included.
+Before/after IDs and start timestamps of all three existing live containers
+matched exactly. No live services, volumes, DNS or certificates were changed.
+
+Documentation now makes rollback ordering explicit: restore only the old Traefik
+configuration before returning the old Docker-label advertisement router. It also
+corrects a historical assertion that whole-stack startup never changes Traefik.
+Keep `FILESTREAM_HAS_SSL=True`. Cookie security and authentication code are
+unchanged, but short-lived access tokens reside in process memory and do not
+survive an application restart; affected pages need refreshing. Forward migration
+was rehearsed on isolated synthetic infrastructure; live TLS/router cutover and
+the newly clarified rollback command sequence were not executed on production.
+Changes remain uncommitted and unpushed pending owner review.

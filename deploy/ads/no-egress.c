@@ -11,6 +11,8 @@
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <string.h>
+#include <sys/wait.h>
 #if defined(__x86_64__)
 #define NATIVE_ARCH AUDIT_ARCH_X86_64
 #elif defined(__aarch64__)
@@ -40,6 +42,18 @@ int main(int argc, char **argv) {
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) ||
         prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program)) {
         perror("ad-service network isolation"); return 1;
+    }
+    if (argc == 3 && !strcmp(argv[1], "--serve")) {
+        pid_t child = fork();
+        if (child < 0) return 1;
+        if (!child) {
+            execlp("nginx", "nginx", "-t", "-c", argv[2], (char *)NULL);
+            _exit(1);
+        }
+        int status;
+        if (waitpid(child, &status, 0) < 0 || !WIFEXITED(status) || WEXITSTATUS(status)) return 1;
+        execlp("nginx", "nginx", "-c", argv[2], "-g", "daemon off;", (char *)NULL);
+        return 1;
     }
     execvp(argv[1], argv + 1);
     perror("ad-service startup"); return 1;

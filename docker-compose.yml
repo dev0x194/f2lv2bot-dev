@@ -2,11 +2,12 @@ services:
   filestreambot:
     build:
       context: .
+      target: application
     image: ${FILESTREAM_IMAGE:-filestreambot:local}
     restart: unless-stopped
     env_file:
       - .env
-    environment:
+    environment: &application-environment
       PYTHONUNBUFFERED: "1"
       PORT: ${PORT:-8080}
       BIND_ADDRESS: 0.0.0.0
@@ -22,16 +23,64 @@ services:
       - "traefik.http.routers.filestreambot.tls=true"
       - "traefik.http.routers.filestreambot.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
       - "traefik.http.services.filestreambot.loadbalancer.server.port=${PORT:-8080}"
+    depends_on:
+      ad-export:
+        condition: service_completed_successfully
+        restart: true
+      ad-documents:
+        condition: service_healthy
+        restart: true
     volumes:
+      - ad-public:/ad-public:ro
       - filestream-cache:${STREAM_CACHE_DIR:-/tmp/filestream_stream_cache}
     networks:
       - proxy
+
+  ad-export:
+    build:
+      context: .
+      target: ad-export
+    env_file: [.env]
+    environment: *application-environment
+    restart: "no"
+    network_mode: none
+    volumes:
+      - ad-public:/ad-public
+
+  ad-documents:
+    build:
+      context: ./deploy/ads
+    image: ${WEB_ADS_IMAGE:-filestream-ad-documents:local}
+    depends_on:
+      ad-export:
+        condition: service_completed_successfully
+        restart: true
+    command: ["--serve", "/ad-public/current/nginx.conf"]
+    restart: unless-stopped
+    user: "101:101"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 64m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=101,gid=101
+    volumes:
+      - ad-public:/ad-public:ro
+    networks: [advertising]
+    healthcheck:
+      test: ["CMD-SHELL", 'release=$$(readlink /ad-public/current) && test -n "$$release" && active=$$(wget -qO- http://127.0.0.1:8080/health) && test "$$active" = "$${release##*/}"']
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   traefik:
     image: traefik:v3
     restart: unless-stopped
     command:
       - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
+      - "--providers.file.directory=/ad-public/traefik"
+      - "--providers.file.watch=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
@@ -48,15 +97,23 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - letsencrypt:/letsencrypt
+      - ad-public:/ad-public:ro
+    depends_on:
+      ad-export:
+        condition: service_completed_successfully
     networks:
       - proxy
+      - advertising
     security_opt:
       - no-new-privileges:true
 
 networks:
+  advertising:
+    internal: true
   proxy:
     name: ${TRAEFIK_NETWORK:-filestreambot-proxy}
 
 volumes:
+  ad-public:
   filestream-cache:
   letsencrypt:
