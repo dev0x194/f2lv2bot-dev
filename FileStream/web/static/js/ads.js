@@ -40,11 +40,13 @@
     let timeout;
     const fail = (reason) => {
       clearTimeout(timeout);
-      frame.remove();
+      // No content yet is provisional. Keep the isolated document and observer
+      // alive so a delayed creative can restore the collapsed placement.
+      if (reason === "error") frame.remove();
       state = reason;
       renderState();
       console.info("[FileStream ads]", placement.dataset.adPlacement || "social", reason);
-      window.removeEventListener("message", listener);
+      if (reason === "error") window.removeEventListener("message", listener);
     };
     const listener = (event) => {
       if (event.source !== frame.contentWindow || event.data?.type !== "filestream-ad") return;

@@ -483,3 +483,32 @@ async def test_smartlink_explicit_navigation_mobile_and_desktop():
             await context.close()
         assert len(navigation_requests) == 2
         await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_ads_delayed_creative_survives_empty_cleanup():
+    """No-fill is provisional: a loaded provider may insert its creative later."""
+    async with playwright.async_playwright() as pw:
+        browser = await pw.chromium.launch(args=['--no-sandbox'])
+        page = await browser.new_page()
+        await page.clock.install()
+        await page.route('https://ads.test/**', lambda route: route.fulfill(
+            content_type='application/javascript',
+            body="setTimeout(()=>{const frame=document.createElement('iframe');frame.srcdoc='<p>Delayed creative fixture</p>';document.body.append(frame)},65000)"))
+        await page.set_content(
+            '<style>[hidden]{display:none!important}.ad-placement{display:none}.ad-placement.loaded{display:block}</style>'
+            '<aside class="ad-placement" data-ad-placement="top"></aside>'
+            '<script id="ad-config" type="application/json">' + json.dumps(ads_config(True)) + '</script>')
+        await page.add_script_tag(path=str(ROOT / 'FileStream/web/static/js/ads.js'))
+        await page.wait_for_function("document.querySelector('iframe')?.contentWindow != null")
+        # Ensure the provider has executed before advancing both documents' clocks.
+        child = await (await page.locator('aside > iframe').element_handle()).content_frame()
+        await child.wait_for_load_state()
+        await page.clock.fast_forward(61000)
+        await page.wait_for_function("document.querySelector('aside').dataset.adState === 'empty'")
+        assert not await page.locator('aside').is_visible()
+        await page.clock.fast_forward(5000)
+        await page.wait_for_function("document.querySelector('aside').dataset.adState === 'content-unverified'", timeout=2000)
+        assert await page.locator('aside > iframe').is_visible()
+        assert await child.locator('iframe').count() == 1
+        await browser.close()

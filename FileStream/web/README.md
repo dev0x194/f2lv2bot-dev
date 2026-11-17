@@ -155,10 +155,61 @@ states without logging URLs or credentials: `error`, `slow-unverified`, `empty`,
 and `content-unverified`. Script errors collapse immediately. After 30 seconds a
 pending placement hides without retrying, allowing late content to reveal it.
 A successfully loaded script that inserts no visible text/media/frame within 60
-seconds collapses. Nested cross-origin iframe fill cannot be inspected: an empty
+seconds collapses provisionally, retaining the isolated document and message
+listener so later content can reveal it. Only a script error destroys the frame.
+Nested cross-origin iframe fill cannot be inspected: an empty
 creative inside such a frame remains unknown and is not reported as success.
 
 ### Blank-banner investigation (2026-11-17)
+
+#### Working Nginx reference follow-up
+
+`test/ad-test.html` is the reference for the original invocation order and URLs.
+The user's successful browser run establishes that real inventory can be served
+on this domain. Earlier empty responses below do not invalidate that result and
+do not establish an account/provider fault.
+
+The follow-up Chromium comparison used fresh contexts, the same HTTPS origin
+(`https://tdrp.cc/`), the three reference keys/URLs, and no Popunder execution.
+Browser-local HTML substitution compared the original banner HTML, rendered V3
+with the current loader, and original banners plus Social Bar, without changing
+Traefik or deploying the application. All invocation responses in that run were
+HTTP 200 with zero-byte bodies; neither implementation produced a real creative.
+Original requests sent the origin referrer; V3 requests sent none. V3 already
+uses parser-inserted scripts in BODY inside opaque sandboxed `srcdoc`; its outer
+frame is created dynamically. No script execution error was observed. This run
+cannot establish whether opaque origin, referrer suppression or frame restrictions
+explain the user's difference. Do not remove those protections on this evidence.
+
+A separate deterministic browser regression proved that the 60-second empty
+cleanup destroyed a provider document before a creative inserted at 65 seconds.
+Cleanup now collapses an empty placement while preserving its document, observer
+and listener; late content restores it. Network errors still destroy the frame.
+The test fixture is synthetic and is not evidence of live advertising fill.
+No change grants advertising scripts access to page DOM, cookies or media tokens.
+
+Configuration inspection matched the four production banner keys, dimensions and
+invocation URLs to the reference. No per-bot advertising override fields were
+present. `load_dotenv` preserves existing process environment values; effective
+configuration also requires the global flag and persisted admin switch. The
+production FileStream container was stopped, so its effective runtime/admin state
+was not verified. Only Nginx and Traefik were running during this investigation.
+
+The remote had only `main`, with no local or remote `dev`. Until an authorized
+`dev` branch exists and live creative validation succeeds, do not describe this
+partial lifecycle correction as the verified production fix or push to `main`.
+
+To restore FileStream later, after reviewing/building the desired code, stop the
+test router before starting the application (run from the repository root):
+
+```sh
+sudo docker compose -f test/docker-compose.yml --env-file test/.env stop ad-test
+sudo docker compose build filestreambot
+sudo docker compose up -d --no-deps filestreambot
+```
+
+These commands leave Traefik, certificates and persistent volumes intact. Do not
+run `down -v`. Restoration/build was not executed as part of this investigation.
 
 Regression validation: `WEB_MEDIA_FIXTURE=/tmp/filestream-test-trailer.mp4
 /tmp/filestream-web-venv/bin/python -m pytest -q` passes all 21 tests. Advertising
