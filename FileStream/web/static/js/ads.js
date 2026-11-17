@@ -61,16 +61,19 @@
         JSON.stringify(options).replace(/</g, "\\u003c") +
         ";"
       : "";
-    // Opaque-origin frames keep third-party scripts away from page tokens and cookies.
+    // Keep invocation in BODY, as required by banner integrations. Parser insertion
+    // preserves document.write ordering; the opaque origin protects page tokens/cookies.
     frame.srcdoc =
-      '<!doctype html><meta name="referrer" content="no-referrer"><style>body{margin:0;overflow:hidden}</style><script>' +
+      '<!doctype html><html><head><meta name="referrer" content="no-referrer"><style>body{margin:0;overflow:hidden}</style></head><body><script>' +
       setup +
       "const report=state=>parent.postMessage({type:'filestream-ad',state},'*');" +
-      "const check=()=>{if(document.querySelector('iframe,img,video,object') || document.body?.innerText.trim()) report('content');};" +
+      "const hasContent=()=>{if(document.querySelector('iframe,img,video,object'))return true;if(!document.body)return false;" +
+      "const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let text;while(text=walker.nextNode()){if(text.textContent.trim()&&!text.parentElement.closest('script,style,template,noscript'))return true;}return false;};" +
+      "const check=()=>{if(hasContent()) report('content');};" +
       "new MutationObserver(check).observe(document.documentElement,{childList:true,subtree:true});" +
       '<\/script><script src="' +
       encode(url) +
-      "\" onload=\"setTimeout(()=>parent.postMessage({type:'filestream-ad',state:(document.querySelector('iframe,img,video,object') || document.body?.innerText.trim())?'content':'empty'},'*'),60000)\" onerror=\"parent.postMessage({type:'filestream-ad',state:'error'},'*')\"><\/script>";
+      "\" onload=\"setTimeout(()=>parent.postMessage({type:'filestream-ad',state:hasContent()?'content':'empty'},'*'),60000)\" onerror=\"parent.postMessage({type:'filestream-ad',state:'error'},'*')\"><\/script></body></html>";
     placement.append(label, frame);
     placement.classList.add("loaded");
     const fit = () => {

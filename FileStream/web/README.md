@@ -175,12 +175,88 @@ Provider eligibility, account/zone status, geography and live fill still require
 provider-side investigation; local fixtures cannot prove live advertising fill.
 Physical Android Chrome/Telegram were not available for verification.
 
+### Production follow-up (2026-11-17)
+
+The deployment at `tdrp.cc` was inspected read-only. Its 20 `WEB_ADS_*` values
+matched the deployment `.env`; global ads were True. Rendered homepage configuration
+confirmed the admin gate allowed banners, social bars were disabled, and mobile
+selected only the 320×50 mobile key plus one 300×250 bottom key. The desktop path
+requested only its 728×90 key plus one inline key. No keys or provider were changed.
+
+The deployed `/static/js/ads.js` SHA-256 matched commit 88741b5 and its running
+container: `edd0441e9b8330b03d178b9187f57219ecd4f3a8adf3d61e3aee73fdaceb6486`.
+Thus stale source was not reproduced for this hostname. The reported three areas
+and old “Advertisement could not load” text were not present on the tested live
+homepage; another affected share page/host or an old browser cache remains possible.
+No private file URL was available, so live secure file pages were not probed.
+
+GET results for all three invocation endpoints, without referrer and with
+`Referer: https://tdrp.cc/`:
+
+| Endpoint suffix / placements | Host curl | Running container urllib | Chromium loader |
+| --- | --- | --- | --- |
+| `d76c947d5bce357e40ad06c5443da535` / mobile top | 200, 0 bytes | 403 | 200, 0 bytes |
+| `360f27a067037e47107b2b725150e7b5` / desktop inline, mobile bottom | 200, 0 bytes | 403 | 200, 0 bytes |
+| `f0c271d2355a57b29b6b278209294341` / desktop top | 200, 0 bytes | 403 | 200, 0 bytes |
+
+Host responses were `application/javascript`, `Content-Length: 0`, zero redirects,
+`Server: cloudflare`, `CF-Cache-Status: DYNAMIC`, `Vary: Accept-Encoding` and
+`Vary: Origin`. Container probes varied: a browser-UA request returned a zero-byte
+JavaScript 403; subsequent standard urllib requests returned 17-byte
+`text/plain; charset=UTF-8` bodies containing `error code: 1010`, with zero redirects.
+[Cloudflare documents error 1010](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/)
+as browser-signature blocking; it accounts for those urllib refusals, but does
+not explain Chromium's successful empty responses or establish inventory status. Banner requests are made by visitors' browsers, not by the Python server.
+
+The exact supplied original mobile snippet was tested first in BODY, without a
+sandbox, using a browser-local intercepted HTML document at the `tdrp.cc` origin.
+No diagnostic page was published, no existing app document or authorization was
+included, and no provider request was mocked. It sent the normal origin referrer,
+received 200/0 bytes and rendered nothing. The isolated loader, with no referrer,
+also received empty responses for all three URLs. Neither comparison logged a
+JavaScript/CSP/sandbox error. No real advertisement was observed.
+
+The actual production homepage was observed for 65 seconds in Chromium's Pixel 7
+emulation: two mobile invocations, no social bar, no horizontal overflow. At 32
+seconds both placements were hidden (`slow-unverified`); at 65 seconds both frames
+had been removed (`empty`). Thus permanent empty-frame cleanup already works for
+these empty responses. Empty **cross-origin creative frames** remain uninspectable
+and are never claimed to be filled merely because a frame exists. Physical Android
+Chrome/Telegram, other geographies and provider callbacks were not available.
+
+One separate application defect was demonstrated with a local provider fixture:
+the loader invoked scripts in HEAD. The [official Adsterra banner guide](https://adsterra.com/blog/how-banner-ads-make-money/)
+requires BODY placement. The frame now explicitly opens BODY before the setup and
+invocation scripts, with a regression asserting `document.currentScript`'s parent.
+This corrects the documented integration pattern; it does not explain the empty
+response to the original snippet. Sandboxing privileges remain unchanged.
+Text detection now walks text nodes excluding script/style/template/noscript;
+`innerText` can otherwise count script source when a document is hidden. Empty
+response, error, timeout and duplicate-request regressions still pass.
+
+The supplied `atOptions` pattern is consistent with Adsterra, but ownership of the
+invocation domain and account approval were not authenticated. The official guide
+requires approved website/banner status and copying current code from GET CODE
+for the registered domain. It does not document compatibility with opaque sandbox
+frames. Verify the exact `tdrp.cc` domain, each unit's status/size, current embed URL,
+and request/impression statistics in the actual provider dashboard. Give support
+the endpoint, timestamp and empty-response evidence; do not send bot credentials,
+cookies or media capabilities. No evidence identifies approval, domain association,
+geography or no inventory as the specific upstream reason.
+
+Changed files for this follow-up: `static/js/ads.js` (BODY invocation and text
+inspection), `tests/test_web_browser.py` (BODY regression), and this report.
+Full local suite with the MP4 fixture: **21 passed**. These mocked integration and
+media tests do not establish live provider fill. No deployment, commit or push was
+performed for this follow-up.
+
 ### Deployment diagnostics
 
 `config.py` loads `ENV_FILE` when supplied, otherwise the repository `.env`;
 existing process variables take precedence. Compose already injects `.env` using
-`env_file`; its `environment` section does not override ad variables. This workspace
-contains only `.env.example`, so no production values or Mongo state were audited.
+`env_file`; its `environment` section does not override ad variables. The working source folder contains only `.env.example`; the separate deployment
+checkout's advertising fields were compared to the running container during the
+follow-up above. No private credentials or unrelated environment were printed.
 Global enable, per-bot `MULTI_TOKEN<n>_WEB_ADS_*` overrides and the persisted
 `/webads` or admin toggle must all permit banners. Keys and invocation URLs are
 public provider configuration, never bot/database/media credentials.

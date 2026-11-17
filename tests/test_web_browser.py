@@ -69,7 +69,7 @@ async def test_browser_layout_themes_actions_and_ads():
             ad_requests.append(route.request.url)
             await route.fulfill(
                 content_type="application/javascript",
-                body="document.write('<div data-key=\"'+atOptions.key+'\" data-size=\"'+atOptions.width+'x'+atOptions.height+'\">Fixture advertisement</div>');",
+                body="window.invocationParent=document.currentScript.parentElement.tagName;document.write('<div data-key=\"'+atOptions.key+'\" data-size=\"'+atOptions.width+'x'+atOptions.height+'\">Fixture advertisement</div>');",
             )
 
         await context.route("https://ads.test/**", ad)
@@ -134,6 +134,7 @@ async def test_browser_layout_themes_actions_and_ads():
                 child = await (await frames.nth(index).element_handle()).content_frame()
                 keys.append(await child.locator("[data-key]").get_attribute("data-key"))
                 sizes.append(await child.locator("[data-key]").get_attribute("data-size"))
+                assert await child.evaluate("window.invocationParent") == "BODY"
                 assert await child.evaluate("atOptions.format") == "iframe"
                 assert await child.evaluate("JSON.stringify(atOptions.params)") == "{}"
                 assert await child.evaluate("(() => {try {return !!parent.document.body;} catch (_) {return false;}})()") is False
