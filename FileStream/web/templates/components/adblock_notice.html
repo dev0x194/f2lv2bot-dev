@@ -1,4 +1,4 @@
-{% if ad_config.enabled %}<aside id="adblock-notice" class="notice" hidden role="region" tabindex="-1" aria-labelledby="adblock-title">
+{% if ad_config.enabled and ad_config.adblock_enabled|default(true) %}<aside id="adblock-notice" class="notice" hidden role="region" tabindex="-1" aria-labelledby="adblock-title">
 {% from "components/icons.html" import icon %}<span class="icon-box accent-3">{{ icon("shield") }}</span><h2 id="adblock-title">An ad blocker may be active</h2>
 <p>Advertising helps support this service. You can allowlist this site in your blocker, then retry. Detection can be mistaken; Telegram and reporting remain available.</p>
 <button id="adblock-retry">Retry detection</button>

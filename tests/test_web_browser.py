@@ -69,7 +69,7 @@ async def test_browser_layout_themes_actions_and_ads():
             ad_requests.append(route.request.url)
             await route.fulfill(
                 content_type="application/javascript",
-                body="document.write('Fixture advertisement');",
+                body="document.write('<div data-key=\"'+atOptions.key+'\" data-size=\"'+atOptions.width+'x'+atOptions.height+'\">Fixture advertisement</div>');",
             )
 
         await context.route("https://ads.test/**", ad)
@@ -127,6 +127,25 @@ async def test_browser_layout_themes_actions_and_ads():
             assert await page.evaluate(
                 "document.documentElement.scrollWidth <= innerWidth"
             )
+            frames = page.locator("[data-ad-placement] > iframe")
+            keys = []
+            sizes = []
+            for index in range(2):
+                child = await (await frames.nth(index).element_handle()).content_frame()
+                keys.append(await child.locator("[data-key]").get_attribute("data-key"))
+                sizes.append(await child.locator("[data-key]").get_attribute("data-size"))
+                assert await child.evaluate("atOptions.format") == "iframe"
+                assert await child.evaluate("JSON.stringify(atOptions.params)") == "{}"
+                assert await child.evaluate("(() => {try {return !!parent.document.body;} catch (_) {return false;}})()") is False
+            assert keys == [top, "shared"]
+            assert sizes == ["728x90" if width == 1440 else "320x50", "300x250"]
+            await page.wait_for_function('Array.from(document.querySelectorAll("[data-ad-placement]")).every(el => el.dataset.adState === "content-unverified")')
+            before = list(ad_requests)
+            await page.add_script_tag(url=base + "/static/js/ads.js")
+            await page.set_viewport_size(dict(width=390 if width == 1440 else 1400, height=900))
+            await page.wait_for_timeout(100)
+            assert ad_requests == before
+            await page.set_viewport_size(dict(width=width, height=900))
             # Positive bait hiding gates optional actions only; an override remains available.
             await page.add_style_tag(content=".adsbox {display:none !important}")
             (
@@ -159,10 +178,25 @@ async def test_browser_layout_themes_actions_and_ads():
         await context.route("https://ads.test/**", fail_provider)
         await page.goto(base + "/gen/public-file?ads=on")
         await page.wait_for_function(
-            'Array.from(document.querySelectorAll(".ad-status")).some(el => !el.hidden)'
+            'Array.from(document.querySelectorAll("[data-ad-placement]")).some(el => el.dataset.adState === "error")'
         )
         assert await page.evaluate("window.filestreamAccessAllowed()")
         assert not await page.locator("#adblock-notice").is_visible()
+        assert await page.locator("[data-ad-placement] > iframe").count() == 0
+        # A successful, empty script is not a filled advertisement.
+        await context.route("https://ads.test/**", lambda route: route.fulfill(content_type="application/javascript", body=""))
+        await page.clock.install()
+        await page.goto(base + "/gen/public-file?ads=on")
+        await page.wait_for_timeout(100)
+        await page.clock.fast_forward(61000)
+        await page.wait_for_function('Array.from(document.querySelectorAll("[data-ad-placement]")).every(el => el.dataset.adState === "empty")')
+        assert await page.locator(".ad-placement.loaded").count() == 0
+        # A hanging request collapses after the grace period without retrying.
+        await context.route("https://ads.test/**", lambda route: None)
+        await page.goto(base + "/gen/public-file?ads=on", wait_until="domcontentloaded")
+        await page.clock.fast_forward(31000)
+        assert await page.locator(".ad-placement.loaded").count() == 0
+        assert await page.locator('[data-ad-state="slow-unverified"]').count() == 2
         ad_requests.clear()
         await page.goto(base + "/gen/public-file")
         assert not ad_requests and await page.locator(".ad-placement").count() == 0

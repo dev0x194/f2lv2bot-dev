@@ -398,32 +398,32 @@ class WebAds:
     }
 
     DESKTOP_TOP_BANNER_KEY = _str_env("WEB_ADS_DESKTOP_TOP_BANNER_KEY", "9626363529c248162c9238de39d16745")
-    DESKTOP_TOP_BANNER_WIDTH = int(env.get("WEB_ADS_DESKTOP_TOP_BANNER_WIDTH", "728"))
-    DESKTOP_TOP_BANNER_HEIGHT = int(env.get("WEB_ADS_DESKTOP_TOP_BANNER_HEIGHT", "90"))
+    DESKTOP_TOP_BANNER_WIDTH = _int_env("WEB_ADS_DESKTOP_TOP_BANNER_WIDTH", 728)
+    DESKTOP_TOP_BANNER_HEIGHT = _int_env("WEB_ADS_DESKTOP_TOP_BANNER_HEIGHT", 90)
     DESKTOP_TOP_BANNER_INVOKE_URL = _str_env(
         "WEB_ADS_DESKTOP_TOP_BANNER_INVOKE_URL",
         "https://www.highperformanceformat.com/9626363529c248162c9238de39d16745/invoke.js",
     )
 
     DESKTOP_INLINE_BANNER_KEY = _str_env("WEB_ADS_DESKTOP_INLINE_BANNER_KEY", "49d82824df1bb87901c1aeb13d4a5185")
-    DESKTOP_INLINE_BANNER_WIDTH = int(env.get("WEB_ADS_DESKTOP_INLINE_BANNER_WIDTH", "300"))
-    DESKTOP_INLINE_BANNER_HEIGHT = int(env.get("WEB_ADS_DESKTOP_INLINE_BANNER_HEIGHT", "250"))
+    DESKTOP_INLINE_BANNER_WIDTH = _int_env("WEB_ADS_DESKTOP_INLINE_BANNER_WIDTH", 300)
+    DESKTOP_INLINE_BANNER_HEIGHT = _int_env("WEB_ADS_DESKTOP_INLINE_BANNER_HEIGHT", 250)
     DESKTOP_INLINE_BANNER_INVOKE_URL = _str_env(
         "WEB_ADS_DESKTOP_INLINE_BANNER_INVOKE_URL",
         "https://www.highperformanceformat.com/49d82824df1bb87901c1aeb13d4a5185/invoke.js",
     )
 
     MOBILE_TOP_BANNER_KEY = _str_env("WEB_ADS_MOBILE_TOP_BANNER_KEY", "92fbe91aad2179437131dbabf96fc28c")
-    MOBILE_TOP_BANNER_WIDTH = int(env.get("WEB_ADS_MOBILE_TOP_BANNER_WIDTH", "320"))
-    MOBILE_TOP_BANNER_HEIGHT = int(env.get("WEB_ADS_MOBILE_TOP_BANNER_HEIGHT", "50"))
+    MOBILE_TOP_BANNER_WIDTH = _int_env("WEB_ADS_MOBILE_TOP_BANNER_WIDTH", 320)
+    MOBILE_TOP_BANNER_HEIGHT = _int_env("WEB_ADS_MOBILE_TOP_BANNER_HEIGHT", 50)
     MOBILE_TOP_BANNER_INVOKE_URL = _str_env(
         "WEB_ADS_MOBILE_TOP_BANNER_INVOKE_URL",
         "https://www.highperformanceformat.com/92fbe91aad2179437131dbabf96fc28c/invoke.js",
     )
 
     MOBILE_BOTTOM_BANNER_KEY = _str_env("WEB_ADS_MOBILE_BOTTOM_BANNER_KEY", "49d82824df1bb87901c1aeb13d4a5185")
-    MOBILE_BOTTOM_BANNER_WIDTH = int(env.get("WEB_ADS_MOBILE_BOTTOM_BANNER_WIDTH", "300"))
-    MOBILE_BOTTOM_BANNER_HEIGHT = int(env.get("WEB_ADS_MOBILE_BOTTOM_BANNER_HEIGHT", "250"))
+    MOBILE_BOTTOM_BANNER_WIDTH = _int_env("WEB_ADS_MOBILE_BOTTOM_BANNER_WIDTH", 300)
+    MOBILE_BOTTOM_BANNER_HEIGHT = _int_env("WEB_ADS_MOBILE_BOTTOM_BANNER_HEIGHT", 250)
     MOBILE_BOTTOM_BANNER_INVOKE_URL = _str_env(
         "WEB_ADS_MOBILE_BOTTOM_BANNER_INVOKE_URL",
         "https://www.highperformanceformat.com/49d82824df1bb87901c1aeb13d4a5185/invoke.js",
@@ -445,7 +445,9 @@ class WebAds:
         "WEB_ADS_POPUNDER_URL",
         "https://cardinaltangible.com/ae/6c/41/ae6c41a5ec0bb6189513b600452e968d.js",
     )
-    _BOOL_ATTRS = {"ENABLED"}
+    SOCIAL_BAR_ENABLED = _bool_env("WEB_ADS_SOCIAL_BAR_ENABLED", False)
+    ADBLOCK_ENABLED = _bool_env("WEB_ADS_ADBLOCK_ENABLED", True)
+    _BOOL_ATTRS = {"ENABLED", "SOCIAL_BAR_ENABLED", "ADBLOCK_ENABLED"}
     _INT_ATTRS = {
         "DESKTOP_TOP_BANNER_WIDTH",
         "DESKTOP_TOP_BANNER_HEIGHT",
@@ -521,7 +523,15 @@ class WebAds:
         key = str(key or "").strip()
         invoke_url = str(invoke_url or "").strip()
         enabled_flag = cls.ENABLED if enabled_override is None else bool(enabled_override)
-        enabled = enabled_flag and bool(key and invoke_url and width and height)
+        # Configuration is administrator-controlled, but never accept executable URL schemes.
+        from urllib.parse import urlsplit
+        try:
+            parsed = urlsplit(invoke_url)
+            valid_url = parsed.scheme == "https" and bool(parsed.hostname) and not (parsed.username or parsed.password)
+            parsed.port  # Reject malformed ports as well.
+        except ValueError:
+            valid_url = False
+        enabled = enabled_flag and bool(key) and valid_url and 0 < width <= 4096 and 0 < height <= 4096
         return {
             "device": device,
             "key": key,
@@ -568,19 +578,13 @@ class WebAds:
             enabled_override=enabled_flag,
         )
 
-        # One shared 300x250 unit, initialized for the active viewport only.
-        # Keep both environment names; desktop inline is canonical when configured.
-        shared = desktop_inline if desktop_inline["key"] and desktop_inline["invoke_url"] else mobile_bottom
-        for slot in (desktop_inline, mobile_bottom):
-            slot["key"] = shared["key"]
-            slot["invoke_url"] = shared["invoke_url"]
-            slot["enabled"] = enabled_flag and bool(slot["key"] and slot["invoke_url"])
-
-        desktop_social_bar_url = cls._resolve_attr("DESKTOP_SOCIAL_BAR_URL", bot=bot) if enabled_flag else ""
-        mobile_social_bar_url = cls._resolve_attr("MOBILE_SOCIAL_BAR_URL", bot=bot) if enabled_flag else ""
+        social_enabled = enabled_flag and cls._resolve_attr("SOCIAL_BAR_ENABLED", bot=bot)
+        desktop_social_bar_url = cls._resolve_attr("DESKTOP_SOCIAL_BAR_URL", bot=bot) if social_enabled else ""
+        mobile_social_bar_url = cls._resolve_attr("MOBILE_SOCIAL_BAR_URL", bot=bot) if social_enabled else ""
 
         return {
             "enabled": enabled_flag,
+            "adblock_enabled": bool(cls._resolve_attr("ADBLOCK_ENABLED", bot=bot)),
             "desktop": {
                 "top_banner": desktop_top,
                 "inline_banner": desktop_inline,

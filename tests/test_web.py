@@ -63,6 +63,11 @@ async def test_ads_global_and_bot_setting():
     e = environment(True)
     html = await e.render["render_public_page"]("public-file", session_id="session")
     assert "ad-config" in html and "adblock.js" in html
+    original_context = e.render["WebAds"].template_context
+    e.render["WebAds"].template_context = lambda **kw: {**ads_config(kw["enabled_override"]), "adblock_enabled": False}
+    html = await e.render["render_public_page"]("public-file", session_id="session")
+    assert "ads.js" in html and "adblock.js" not in html and 'id="adblock-notice"' not in html
+    e.render["WebAds"].template_context = original_context
     e.db.get_web_ads_status.return_value = False
     html = await e.render["render_public_page"]("public-file", session_id="session")
     assert "ad-config" not in html and "adblock" not in html
@@ -252,7 +257,7 @@ def test_all_templates_compile_and_python_syntax():
         compile((ROOT / name).read_text(), name, "exec")
 
 
-def test_ad_configuration_global_switch_and_shared_provider():
+def test_ad_configuration_global_switch_and_independent_slots():
     tree = ast.parse((ROOT / "FileStream/config.py").read_text())
     cls = next(
         n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "WebAds"
@@ -261,6 +266,7 @@ def test_ad_configuration_global_switch_and_shared_provider():
         env={},
         _BOT_WEB_AD_OVERRIDES={},
         _bool_env=lambda key, default=False: default,
+        _int_env=lambda key, default=0: default,
         _str_env=lambda key, default="": default,
     )
     exec(compile(ast.Module(body=[cls], type_ignores=[]), "config.py", "exec"), ns)
@@ -270,14 +276,19 @@ def test_ad_configuration_global_switch_and_shared_provider():
         2: {"WEB_ADS_MOBILE_BOTTOM_BANNER_KEY": "other", "WEB_ADS_ENABLED": "true"}
     }
     config = ads.template_context(enabled_override=True, bot=bot)
-    assert (
-        config["desktop"]["inline_banner"]["key"]
-        == config["mobile"]["bottom_banner"]["key"]
-    )
-    assert (
-        config["desktop"]["inline_banner"]["invoke_url"]
-        == config["mobile"]["bottom_banner"]["invoke_url"]
-    )
+    assert config["mobile"]["bottom_banner"]["key"] == "other"
+    assert config["desktop"]["inline_banner"]["key"] != "other"
+    assert not config["desktop"]["social_bar_url"]
+    assert not config["mobile"]["social_bar_url"]
+    for device, name, dimensions in [("desktop", "top_banner", (728,90)), ("desktop", "inline_banner", (300,250)), ("mobile", "top_banner", (320,50)), ("mobile", "bottom_banner", (300,250))]:
+        slot = config[device][name]
+        assert (slot["width"], slot["height"]) == dimensions
+        assert slot["enabled"]
+    for url in ["javascript:alert(1)", "http://ads.test/script", "https://user:pass@ads.test/script", ""]:
+        assert not ads._banner_slot("mobile", "key", 320, 50, url)["enabled"]
+    assert not ads._banner_slot("mobile", "", 320, 50, "https://ads.test/script")["enabled"]
+    ads.BOT_OVERRIDES[2]["WEB_ADS_ENABLED"] = "false"
+    assert not ads.template_context(enabled_override=True, bot=bot)["enabled"]
     ads.ENABLED = False
     assert not ads.template_context(enabled_override=True, bot=bot)["enabled"]
 

@@ -122,20 +122,77 @@ Existing configuration names are preserved:
 | Mobile top | `WEB_ADS_MOBILE_TOP_BANNER_*` | 320×50 |
 | Mobile bottom | `WEB_ADS_MOBILE_BOTTOM_BANNER_*` | 300×250 |
 
-Banner suffixes are `KEY`, `INVOKE_URL`, `WIDTH`, `HEIGHT`. The shared 300×250
-key/URL is canonicalized to desktop-inline configuration when present, otherwise
-to mobile-bottom configuration; both legacy environment names remain accepted.
-Only one top and one shared unit initialize for the initial viewport. A resize
-does not inject a second shared unit. Provider scripts run in opaque-origin
-sandboxed frames, with reserved dimensions and Advertisement labels. Theme and
-page tokens are inaccessible to these scripts. Use HTTPS provider URLs.
+Banner suffixes are `KEY`, `INVOKE_URL`, `WIDTH`, `HEIGHT`. Each slot keeps its
+own key, URL and dimensions, including independent desktop-inline/mobile-bottom
+settings. Only the active viewport's top and secondary units initialize. Resizing
+scales existing units to fit without changing their internal viewport or making
+new provider requests. Reload the page after switching device layouts to select
+that device's placements.
 
-`WEB_ADS_DESKTOP_SOCIAL_BAR_URL` and `WEB_ADS_MOBILE_SOCIAL_BAR_URL` load only for
-the selected viewport in an isolated labelled strip. Providers that require
-parent DOM access may not work inside the sandbox; verify compatibility with
-your provider. A script load is not evidence an advertisement was displayed.
-Errors/timeouts show nonblocking feedback. Social layouts cannot escape their
-frame. Third-party behavior has not been verified live.
+Invocation URLs are HTTPS JavaScript resources, not iframe destinations. Each
+opaque-origin sandboxed `srcdoc` document defines its own `atOptions` before a
+parser-inserted provider script; this supports `document.write` without global
+key races. Scripts cannot read page cookies, DOM or media capabilities. Do not
+add `allow-same-origin` to these same-origin `srcdoc` frames. Providers requiring
+parent-page access, storage or top navigation are not supported by this isolated
+integration; use a provider-supported isolated embed on a separate origin rather
+than removing the security boundary. No production compatibility claim is made
+for such providers.
+
+Social bars require `WEB_ADS_SOCIAL_BAR_ENABLED=True` (default False) in addition
+to an active device URL and the global/admin switches. A URL alone does not enable
+them. Social layouts remain confined to their frame. Popunders are never executed.
+`WEB_ADS_ADBLOCK_ENABLED=False` disables the optional detector and warning;
+otherwise Retry and Continue anyway retain their existing behavior.
+
+A script download or iframe load does not prove advertising fill. Console messages
+prefixed `[FileStream ads]` and `data-ad-state` on each placement expose delivery
+states without logging URLs or credentials: `error`, `slow-unverified`, `empty`,
+and `content-unverified`. Script errors collapse immediately. After 30 seconds a
+pending placement hides without retrying, allowing late content to reveal it.
+A successfully loaded script that inserts no visible text/media/frame within 60
+seconds collapses. Nested cross-origin iframe fill cannot be inspected: an empty
+creative inside such a frame remains unknown and is not reported as success.
+
+### Blank-banner investigation (2026-11-17)
+
+Regression validation: `WEB_MEDIA_FIXTURE=/tmp/filestream-test-trailer.mp4
+/tmp/filestream-web-venv/bin/python -m pytest -q` passes all 21 tests. Advertising
+fixtures exercise per-frame options/order, parent isolation, duplicate execution,
+resize request counts, empty scripts, blocked requests, timeouts, global/admin
+switches and detector disabling. Media fixtures cover the existing secure routes
+and actual Chromium MP4 playback; these are local fixtures, not production services.
+
+All three supplied `bellnewyork.org/22/<key>` URLs returned HTTP 200 with **zero
+response bytes** in direct GET probes. Chromium also received a zero-byte mobile
+script and inserted no creative or nested iframe in the existing sandbox. Thus
+this environment reproduced blank frames from an empty invocation response;
+there is no evidence here that sandbox privileges caused that response. The old
+loader incorrectly accepted script load as success and retained the empty frame.
+Other corrected defects were desktop-inline configuration overwriting the mobile
+bottom slot, implicit social-bar execution, and narrow-screen frame clipping.
+Provider eligibility, account/zone status, geography and live fill still require
+provider-side investigation; local fixtures cannot prove live advertising fill.
+Physical Android Chrome/Telegram were not available for verification.
+
+### Deployment diagnostics
+
+`config.py` loads `ENV_FILE` when supplied, otherwise the repository `.env`;
+existing process variables take precedence. Compose already injects `.env` using
+`env_file`; its `environment` section does not override ad variables. This workspace
+contains only `.env.example`, so no production values or Mongo state were audited.
+Global enable, per-bot `MULTI_TOKEN<n>_WEB_ADS_*` overrides and the persisted
+`/webads` or admin toggle must all permit banners. Keys and invocation URLs are
+public provider configuration, never bot/database/media credentials.
+
+Apply source/env changes with `docker compose up -d --build --force-recreate
+filestreambot` (a restart alone does not reload container environment).
+Inspect `docker compose logs --tail=100 filestreambot` without dumping environment
+variables. In browser DevTools use Network to inspect invocation status, response
+body, blocked requests and subsequent creative requests; inspect Console for CSP,
+sandbox and script errors. Compare ordinary Chrome with Telegram on the same
+network and inspect each ad frame separately. Empty HTTP 200 is not proof of an
+ad blocker. Do not copy media capability URLs or cookies into provider support logs.
 
 `WEB_ADS_SMARTLINK_URL` and `WEB_ADS_POPUNDER_URL` remain existing configuration
 fields, but V2 intentionally executes neither: no site policy authorizes

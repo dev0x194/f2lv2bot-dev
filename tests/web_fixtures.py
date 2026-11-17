@@ -58,6 +58,7 @@ def ads_config(enabled=False):
 
     return dict(
         enabled=enabled,
+        adblock_enabled=True,
         desktop=dict(
             top_banner=slot("wide", 728, 90),
             inline_banner=slot("shared", 300, 250),
