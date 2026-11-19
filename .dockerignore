@@ -24,3 +24,25 @@ ENV/
 dist/
 build/
 file_0000000048f471fa981abef0b4a924a9.png
+
+# Offline tests and audit documents are not application runtime.
+tests/
+deploy/ads/*.md
+
+# Local TLS material and browser captures are private, never deployment assets.
+*.pem
+*.key
+*.har
+ad-preview-diagnostics*.json
+.preview-state/
+
+# Private environment backups must never enter Git or image contexts.
+.env.*
+
+# Never include SSH state in source or container contexts.
+.ssh/
+id_rsa
+id_ed25519
+
+# Original standalone diagnostic is retained locally, never shipped.
+test/

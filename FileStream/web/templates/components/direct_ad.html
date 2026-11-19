@@ -1,0 +1,1 @@
+{% if ad_config.enabled and ad_config.has_any_banner %}<script>window.FileStreamDirectAds?.banner({{ ad_config|tojson }}, {{ placement|tojson }});</script>{% endif %}

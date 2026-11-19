@@ -12,9 +12,12 @@
   };
   apply();
   media.addEventListener("change", apply);
-  addEventListener("DOMContentLoaded", () => {
+  const bindSelect = () => {
     const select = document.getElementById("theme");
+    if (!select) return;
     select.value = preference;
+    if (select.dataset.themeBound) return;
+    select.dataset.themeBound = "true";
     select.addEventListener("change", () => {
       preference = select.value;
       try {
@@ -22,7 +25,9 @@
       } catch (_) {}
       apply();
     });
-  });
+  };
+  addEventListener("DOMContentLoaded", bindSelect, {once: true});
+  addEventListener("filestream:content-ready", bindSelect, {once: true});
   addEventListener("storage", (e) => {
     if (e.key === "filestream-theme") {
       preference = ["light", "dark"].includes(e.newValue)

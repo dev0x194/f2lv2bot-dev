@@ -121,7 +121,7 @@ def _build_server_url(raw_fqdn: str, default_port: int, *, has_ssl: bool, no_por
 
 
 class Telegram:
-    API_ID = int(env.get("API_ID", 0))
+    API_ID = _int_env("API_ID", 0)
     API_HASH = str(env.get("API_HASH"))
     BOT_TOKEN = str(env.get("BOT_TOKEN", env.get("TELEGRAM_BOT_TOKEN")))
 
@@ -391,278 +391,81 @@ class Server:
 
 
 class WebAds:
-    MODE = _str_env("WEB_ADS_MODE", "isolated_documents")
-    PROVIDER_PUBLISHER_HOST = _str_env("FQDN", "")
-    PROVIDER_IFRAME_320X50 = _str_env("WEB_ADS_PROVIDER_IFRAME_320X50", "")
-    PROVIDER_IFRAME_300X250 = _str_env("WEB_ADS_PROVIDER_IFRAME_300X250", "")
-    PROVIDER_IFRAME_728X90 = _str_env("WEB_ADS_PROVIDER_IFRAME_728X90", "")
-    ENABLED = _bool_env("WEB_ADS_ENABLED", True)
-    # Required for banner delivery. Never fall back to executing ads in the app.
-    DOCUMENT_ORIGIN = _str_env("WEB_ADS_DOCUMENT_ORIGIN", "")
+    """One master switch; each explicit, valid public tag activates itself."""
+
+    ENABLED = str(env.get("WEB_ADS_ENABLED", "")).strip().lower() in ("true", "1")
     BOT_OVERRIDES = _BOT_WEB_AD_OVERRIDES
-    BOT_DEFAULT_POPUNDER_URLS = {
-        1: "https://cardinaltangible.com/63/ab/3d/63ab3df91686bbebb1c3ae1ef956f7b4.js",
-    }
-
-    DESKTOP_TOP_BANNER_KEY = _str_env("WEB_ADS_DESKTOP_TOP_BANNER_KEY", "9626363529c248162c9238de39d16745")
-    DESKTOP_TOP_BANNER_WIDTH = _int_env("WEB_ADS_DESKTOP_TOP_BANNER_WIDTH", 728)
-    DESKTOP_TOP_BANNER_HEIGHT = _int_env("WEB_ADS_DESKTOP_TOP_BANNER_HEIGHT", 90)
-    DESKTOP_TOP_BANNER_INVOKE_URL = _str_env(
-        "WEB_ADS_DESKTOP_TOP_BANNER_INVOKE_URL",
-        "https://www.highperformanceformat.com/9626363529c248162c9238de39d16745/invoke.js",
-    )
-
-    DESKTOP_INLINE_BANNER_KEY = _str_env("WEB_ADS_DESKTOP_INLINE_BANNER_KEY", "49d82824df1bb87901c1aeb13d4a5185")
-    DESKTOP_INLINE_BANNER_WIDTH = _int_env("WEB_ADS_DESKTOP_INLINE_BANNER_WIDTH", 300)
-    DESKTOP_INLINE_BANNER_HEIGHT = _int_env("WEB_ADS_DESKTOP_INLINE_BANNER_HEIGHT", 250)
-    DESKTOP_INLINE_BANNER_INVOKE_URL = _str_env(
-        "WEB_ADS_DESKTOP_INLINE_BANNER_INVOKE_URL",
-        "https://www.highperformanceformat.com/49d82824df1bb87901c1aeb13d4a5185/invoke.js",
-    )
-
-    MOBILE_TOP_BANNER_KEY = _str_env("WEB_ADS_MOBILE_TOP_BANNER_KEY", "92fbe91aad2179437131dbabf96fc28c")
-    MOBILE_TOP_BANNER_WIDTH = _int_env("WEB_ADS_MOBILE_TOP_BANNER_WIDTH", 320)
-    MOBILE_TOP_BANNER_HEIGHT = _int_env("WEB_ADS_MOBILE_TOP_BANNER_HEIGHT", 50)
-    MOBILE_TOP_BANNER_INVOKE_URL = _str_env(
-        "WEB_ADS_MOBILE_TOP_BANNER_INVOKE_URL",
-        "https://www.highperformanceformat.com/92fbe91aad2179437131dbabf96fc28c/invoke.js",
-    )
-
-    MOBILE_BOTTOM_BANNER_KEY = _str_env("WEB_ADS_MOBILE_BOTTOM_BANNER_KEY", "49d82824df1bb87901c1aeb13d4a5185")
-    MOBILE_BOTTOM_BANNER_WIDTH = _int_env("WEB_ADS_MOBILE_BOTTOM_BANNER_WIDTH", 300)
-    MOBILE_BOTTOM_BANNER_HEIGHT = _int_env("WEB_ADS_MOBILE_BOTTOM_BANNER_HEIGHT", 250)
-    MOBILE_BOTTOM_BANNER_INVOKE_URL = _str_env(
-        "WEB_ADS_MOBILE_BOTTOM_BANNER_INVOKE_URL",
-        "https://www.highperformanceformat.com/49d82824df1bb87901c1aeb13d4a5185/invoke.js",
-    )
-
-    DESKTOP_SOCIAL_BAR_URL = _str_env(
-        "WEB_ADS_DESKTOP_SOCIAL_BAR_URL",
-        "https://cardinaltangible.com/27/fa/cf/27facf136dc45ce0b5faf7b999e9e6f0.js",
-    )
-    MOBILE_SOCIAL_BAR_URL = _str_env(
-        "WEB_ADS_MOBILE_SOCIAL_BAR_URL",
-        "https://cardinaltangible.com/27/fa/cf/27facf136dc45ce0b5faf7b999e9e6f0.js",
-    )
-    SMARTLINK_URL = _str_env(
-        "WEB_ADS_SMARTLINK_URL",
-        "",
-    )
-    POPUNDER_URL = _str_env(
-        "WEB_ADS_POPUNDER_URL",
-        "https://cardinaltangible.com/ae/6c/41/ae6c41a5ec0bb6189513b600452e968d.js",
-    )
-    SOCIAL_BAR_ENABLED = _bool_env("WEB_ADS_SOCIAL_BAR_ENABLED", False)
-    ADBLOCK_ENABLED = _bool_env("WEB_ADS_ADBLOCK_ENABLED", True)
-    _BOOL_ATTRS = {"ENABLED", "SOCIAL_BAR_ENABLED", "ADBLOCK_ENABLED"}
-    _INT_ATTRS = {
-        "DESKTOP_TOP_BANNER_WIDTH",
-        "DESKTOP_TOP_BANNER_HEIGHT",
-        "DESKTOP_INLINE_BANNER_WIDTH",
-        "DESKTOP_INLINE_BANNER_HEIGHT",
-        "MOBILE_TOP_BANNER_WIDTH",
-        "MOBILE_TOP_BANNER_HEIGHT",
-        "MOBILE_BOTTOM_BANNER_WIDTH",
-        "MOBILE_BOTTOM_BANNER_HEIGHT",
-    }
+    POPUNDER_URL = _str_env("WEB_ADS_POPUNDER_URL", "")
+    DESKTOP_SOCIAL_BAR_URL = _str_env("WEB_ADS_DESKTOP_SOCIAL_BAR_URL", "")
+    MOBILE_SOCIAL_BAR_URL = _str_env("WEB_ADS_MOBILE_SOCIAL_BAR_URL", "")
+    SMARTLINK_URL = _str_env("WEB_ADS_SMARTLINK_URL", "")
+    _WARNED = set()
+    for _placement in ("DESKTOP_TOP", "DESKTOP_INLINE", "MOBILE_TOP", "MOBILE_BOTTOM"):
+        for _field in ("KEY", "INVOKE_URL", "WIDTH", "HEIGHT"):
+            _attr = _placement + "_BANNER_" + _field
+            locals()[_attr] = _str_env("WEB_ADS_" + _attr, "")
+    del _placement, _field, _attr
 
     @classmethod
-    def _client_index(cls, bot=None) -> int:
-        client_index = getattr(bot, "client_index", None)
-        if client_index is None:
-            name = str(getattr(bot, "name", "") or "").strip()
-            client_index = int(name) if name.isdigit() else 0
+    def _resolve_attr(cls, attr, *, bot=None):
+        index = getattr(bot, "client_index", 0)
+        if not index:
+            name = str(getattr(bot, "name", "") or "")
+            index = int(name) if name.isdigit() else 0
         try:
-            return max(int(client_index or 0), 0)
-        except Exception:
-            return 0
+            index = max(0, int(index or 0))
+        except (TypeError, ValueError):
+            index = 0
+        return cls.BOT_OVERRIDES.get(index, {}).get("WEB_ADS_" + attr, getattr(cls, attr))
 
     @classmethod
-    def _env_key_for_attr(cls, attr: str) -> str:
-        attr = str(attr or "").strip().upper()
-        if attr == "ENABLED":
-            return "WEB_ADS_ENABLED"
-        return f"WEB_ADS_{attr}"
+    def enabled_for_bot(cls, bot=None):
+        return bool(cls.ENABLED)
 
     @classmethod
-    def _resolve_attr(cls, attr: str, *, bot=None):
-        attr = str(attr or "").strip().upper()
-        default_value = getattr(cls, attr)
-        client_index = cls._client_index(bot)
-        if client_index <= 0:
-            return default_value
-
-        override = cls.BOT_OVERRIDES.get(client_index, {}).get(cls._env_key_for_attr(attr), None)
-        if override is None:
-            if attr == "POPUNDER_URL":
-                return cls.BOT_DEFAULT_POPUNDER_URLS.get(client_index, default_value)
-            return default_value
-
-        raw = str(override).strip()
-        if attr in cls._BOOL_ATTRS:
-            if raw == "":
-                return default_value
-            return raw.lower() in ("1", "true", "t", "yes", "y")
-        if attr in cls._INT_ATTRS:
-            if raw == "":
-                return default_value
-            try:
-                return int(raw)
-            except Exception:
-                return default_value
-        return raw
-
-    @classmethod
-    def enabled_for_bot(cls, bot=None) -> bool:
-        return bool(cls.ENABLED) and bool(cls._resolve_attr("ENABLED", bot=bot))
-
-    @classmethod
-    def _banner_slot(
-        cls,
-        device: str,
-        key: str,
-        width: int,
-        height: int,
-        invoke_url: str,
-        *,
-        enabled_override: bool | None = None,
-    ) -> dict:
-        key = str(key or "").strip()
-        invoke_url = str(invoke_url or "").strip()
-        enabled_flag = cls.ENABLED if enabled_override is None else bool(enabled_override)
-        # Configuration is administrator-controlled, but never accept executable URL schemes.
-        from urllib.parse import urlsplit
+    def _banner_slot(cls, device, key, width, height, invoke_url, *, enabled_override=None):
+        from FileStream.web.direct_ads import banner
         try:
-            parsed = urlsplit(invoke_url)
-            valid_url = parsed.scheme == "https" and bool(parsed.hostname) and not (parsed.username or parsed.password)
-            parsed.port  # Reject malformed ports as well.
-        except ValueError:
-            valid_url = False
-        from FileStream.web.ad_documents import document_url
-        try:
-            ad_document_url = document_url(cls.DOCUMENT_ORIGIN, dict(
-                key=key, width=width, height=height, invoke_url=invoke_url))
+            w, h = int(str(width)), int(str(height))
         except (ValueError, TypeError):
-            ad_document_url = ""
-        enabled = enabled_flag and bool(key) and valid_url and bool(ad_document_url) and 0 < width <= 4096 and 0 < height <= 4096
-        return {
-            "device": device,
-            "key": key,
-            "width": int(width or 0),
-            "height": int(height or 0),
-            "invoke_url": invoke_url,
-            "document_url": ad_document_url,
-            "enabled": enabled,
-        }
+            w, h = 0, 0
+        slot = dict(device=device, key=str(key or "").strip(), width=w, height=h,
+                    invoke_url=str(invoke_url or "").strip(), enabled=False)
+        allowed = cls.ENABLED and enabled_override is not False
+        slot["enabled"] = bool(allowed and banner(slot))
+        return slot
 
     @staticmethod
-    def _validated_smartlink_url(value) -> str:
-        """Validate a trusted administrator's external navigation destination.
-
-        Never fetch the destination server-side or execute it as a script.
-        """
-        from urllib.parse import urlsplit
-        value = str(value or "").strip()
-        if not value or any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c == "\\" for c in value):
-            return ""
-        try:
-            parsed = urlsplit(value)
-            if parsed.scheme != "https" or not parsed.hostname or parsed.username is not None or parsed.password is not None:
-                return ""
-            parsed.port  # Invalid ports must not reach the browser.
-            host = parsed.hostname.encode("idna").decode("ascii")
-            if any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-" for c in host):
-                return ""
-        except (ValueError, UnicodeError):
-            return ""
-        return value
+    def _validated_smartlink_url(value):
+        from FileStream.web.direct_ads import smartlink_url
+        return smartlink_url(value)
 
     @classmethod
-    def template_context(cls, enabled_override: bool | None = None, *, bot=None) -> dict:
-        configured_enabled = bool(cls.ENABLED) and bool(cls._resolve_attr("ENABLED", bot=bot))
-        enabled_flag = configured_enabled if enabled_override is None else bool(enabled_override) and configured_enabled
-        desktop_top = cls._banner_slot(
-            "desktop",
-            cls._resolve_attr("DESKTOP_TOP_BANNER_KEY", bot=bot),
-            cls._resolve_attr("DESKTOP_TOP_BANNER_WIDTH", bot=bot),
-            cls._resolve_attr("DESKTOP_TOP_BANNER_HEIGHT", bot=bot),
-            cls._resolve_attr("DESKTOP_TOP_BANNER_INVOKE_URL", bot=bot),
-            enabled_override=enabled_flag,
-        )
-        desktop_inline = cls._banner_slot(
-            "desktop",
-            cls._resolve_attr("DESKTOP_INLINE_BANNER_KEY", bot=bot),
-            cls._resolve_attr("DESKTOP_INLINE_BANNER_WIDTH", bot=bot),
-            cls._resolve_attr("DESKTOP_INLINE_BANNER_HEIGHT", bot=bot),
-            cls._resolve_attr("DESKTOP_INLINE_BANNER_INVOKE_URL", bot=bot),
-            enabled_override=enabled_flag,
-        )
-        mobile_top = cls._banner_slot(
-            "mobile",
-            cls._resolve_attr("MOBILE_TOP_BANNER_KEY", bot=bot),
-            cls._resolve_attr("MOBILE_TOP_BANNER_WIDTH", bot=bot),
-            cls._resolve_attr("MOBILE_TOP_BANNER_HEIGHT", bot=bot),
-            cls._resolve_attr("MOBILE_TOP_BANNER_INVOKE_URL", bot=bot),
-            enabled_override=enabled_flag,
-        )
-        mobile_bottom = cls._banner_slot(
-            "mobile",
-            cls._resolve_attr("MOBILE_BOTTOM_BANNER_KEY", bot=bot),
-            cls._resolve_attr("MOBILE_BOTTOM_BANNER_WIDTH", bot=bot),
-            cls._resolve_attr("MOBILE_BOTTOM_BANNER_HEIGHT", bot=bot),
-            cls._resolve_attr("MOBILE_BOTTOM_BANNER_INVOKE_URL", bot=bot),
-            enabled_override=enabled_flag,
-        )
-
-        contracts = []
-        mode_error = ""
-        if cls.MODE != "isolated_documents":
-            from FileStream.web.provider_iframes import approved_frame
-            mode_error = "provider-contract-unverified" if cls.MODE == "provider_iframe" else "invalid-ad-mode"
-            publisher = "https://" + cls.PROVIDER_PUBLISHER_HOST
-            for slot in (desktop_top, desktop_inline, mobile_top, mobile_bottom):
-                slot["enabled"] = False
-                slot["document_url"] = ""
-                if cls.MODE == "provider_iframe":
-                    size = str(slot["width"]) + "X" + str(slot["height"])
-                    frame = approved_frame(getattr(cls, "PROVIDER_IFRAME_" + size, ""),
-                                           slot["width"], slot["height"], publisher)
-                    if frame:
-                        slot["document_url"] = frame["url"]
-                        slot["enabled"] = enabled_flag
-                        if frame not in contracts:
-                            contracts.append(frame)
-            if contracts:
-                mode_error = ""  # Missing/unapproved slots still remain disabled individually.
-
-        social_enabled = cls.MODE == "isolated_documents" and enabled_flag and cls._resolve_attr("SOCIAL_BAR_ENABLED", bot=bot)
-        desktop_social_bar_url = cls._resolve_attr("DESKTOP_SOCIAL_BAR_URL", bot=bot) if social_enabled else ""
-        mobile_social_bar_url = cls._resolve_attr("MOBILE_SOCIAL_BAR_URL", bot=bot) if social_enabled else ""
-
-        return {
-            "enabled": enabled_flag,
-            "mode": cls.MODE,
-            "mode_error": mode_error,
-            "provider_iframe_contracts": contracts,
-            "provider_publisher_origin": "https://" + cls.PROVIDER_PUBLISHER_HOST,
-            "adblock_enabled": bool(cls._resolve_attr("ADBLOCK_ENABLED", bot=bot)),
-            "desktop": {
-                "top_banner": desktop_top,
-                "inline_banner": desktop_inline,
-                "social_bar_url": desktop_social_bar_url,
-            },
-            "mobile": {
-                "top_banner": mobile_top,
-                "bottom_banner": mobile_bottom,
-                "social_bar_url": mobile_social_bar_url,
-            },
-            "smartlink_url": cls._validated_smartlink_url(cls._resolve_attr("SMARTLINK_URL", bot=bot)) if enabled_flag else "",
-            "popunder_url": cls._resolve_attr("POPUNDER_URL", bot=bot) if enabled_flag and cls.MODE == "isolated_documents" else "",
-            "has_any_banner": any(
-                slot["enabled"] for slot in (desktop_top, desktop_inline, mobile_top, mobile_bottom)
-            ),
-            "has_any_social_bar": bool(desktop_social_bar_url or mobile_social_bar_url),
-        }
+    def template_context(cls, enabled_override=None, *, bot=None):
+        import logging
+        from FileStream.web.direct_ads import script_url
+        enabled = bool(cls.ENABLED) and enabled_override is not False
+        slots = {}
+        for prefix, device in (("DESKTOP_TOP", "desktop"), ("DESKTOP_INLINE", "desktop"),
+                               ("MOBILE_TOP", "mobile"), ("MOBILE_BOTTOM", "mobile")):
+            values = [cls._resolve_attr(prefix + "_BANNER_" + field, bot=bot)
+                      for field in ("KEY", "WIDTH", "HEIGHT", "INVOKE_URL")]
+            slot = cls._banner_slot(device, *values, enabled_override=enabled)
+            if enabled and any(str(v or "").strip() for v in values) and not slot["enabled"]:
+                # Once per placement/process. Never include values or exceptions.
+                if prefix not in cls._WARNED:
+                    logging.getLogger(__name__).warning("Advertisement placement %s disabled: incomplete or invalid configuration", prefix)
+                    cls._WARNED.add(prefix)
+            slots[prefix] = slot
+        social = {device: script_url(cls._resolve_attr(device.upper() + "_SOCIAL_BAR_URL", bot=bot)) if enabled else ""
+                  for device in ("desktop", "mobile")}
+        return dict(enabled=enabled,
+            desktop=dict(top_banner=slots["DESKTOP_TOP"], inline_banner=slots["DESKTOP_INLINE"]),
+            mobile=dict(top_banner=slots["MOBILE_TOP"], bottom_banner=slots["MOBILE_BOTTOM"]),
+            popunder_url=script_url(cls._resolve_attr("POPUNDER_URL", bot=bot)) if enabled else "",
+            social_bar_urls=social, has_any_social_bar=any(social.values()),
+            smartlink_url=cls._validated_smartlink_url(cls._resolve_attr("SMARTLINK_URL", bot=bot)) if enabled else "",
+            has_any_banner=any(slot["enabled"] for slot in slots.values()))
 
 
 class NSFW:
@@ -704,11 +507,38 @@ class FeatureFlags:
     ADVANCED_ANALYTICS: bool = _bool_env("FEATURE_ADVANCED_ANALYTICS", True)
 
 
+def validate_credentials():
+    """Fail before importing client/database initializers; never include values."""
+    from urllib.parse import urlsplit
+    required = ("API_ID", "API_HASH", "BOT_TOKEN", "DATABASE_URL", "FQDN")
+    invalid = [name for name in required if not str(env.get(name, "")).strip()]
+    api_id = str(env.get("API_ID", ""))
+    if not re.fullmatch(r"[0-9]{1,15}", api_id) or int(api_id) <= 0:
+        invalid.append("API_ID")
+    if not re.fullmatch(r"[a-fA-F0-9]{32}", str(env.get("API_HASH", ""))):
+        invalid.append("API_HASH")
+    if not re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+", str(env.get("BOT_TOKEN", ""))):
+        invalid.append("BOT_TOKEN")
+    try:
+        uri = urlsplit(str(env.get("DATABASE_URL", "")))
+        if uri.scheme not in ("mongodb", "mongodb+srv") or not uri.hostname:
+            invalid.append("DATABASE_URL")
+    except ValueError:
+        invalid.append("DATABASE_URL")
+    for name, value in env.items():
+        if name == "FQDN" or re.fullmatch(r"MULTI_TOKEN\d+_FQDN", name):
+            if value and not re.fullmatch(r"[A-Za-z0-9]+(?:[A-Za-z0-9.-]*[A-Za-z0-9])?", value):
+                invalid.append(name)
+    if invalid:
+        raise ValueError("Invalid or missing required configuration: " + ", ".join(sorted(set(invalid))))
+
+
 def validate_configuration() -> dict[str, Any]:
     """
     Validates essential production settings at startup and returns a secret-redacted summary.
     Raises ValueError on invalid combinations.
     """
+    validate_credentials()
     errors: list[str] = []
     if not Telegram.DATABASE_URL:
         errors.append("DATABASE_URL must be configured")

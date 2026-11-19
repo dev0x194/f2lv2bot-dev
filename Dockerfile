@@ -1,12 +1,3 @@
-FROM nginx:alpine AS ad-export
-RUN apk add --no-cache python3 py3-dotenv
-WORKDIR /app
-COPY FileStream/__init__.py FileStream/config.py /app/FileStream/
-COPY FileStream/web /app/FileStream/web
-COPY deploy/ads/nginx.conf /app/deploy/ads/nginx.conf
-ENV PYTHONDONTWRITEBYTECODE=1
-CMD ["python3", "-m", "FileStream.web.tools.deployment", "export"]
-
 FROM python:3.11-slim-bookworm AS application
 
 ENV PYTHONUNBUFFERED=1 \
@@ -33,7 +24,10 @@ RUN pip install --upgrade pip && \
 # Copy application source
 COPY . .
 
+# Persist primary Telegram authorization outside replaceable container layers.
+RUN mkdir -p /sessions && chmod 700 /sessions
+
 EXPOSE 8080
 
-ENTRYPOINT ["python", "-m", "FileStream.web.tools.deployment", "application"]
+
 CMD ["python", "-m", "FileStream"]

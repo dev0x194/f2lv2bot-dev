@@ -28,11 +28,15 @@
 <a id="launch-vlc" class="button">Launch VLC</a>
 </div>
 <nav class="safety" aria-label="File support">{% if telegram_url %}<a href="{{ telegram_url }}">Open Telegram ↗</a>{% endif %}{% if report_url %}<a href="{{ report_url }}">Report NSFW</a>{% endif %}</nav>
-{% include 'components/adblock_notice.html' %}</article>{% with placement='inline' %}{% include 'components/ads.html' %}{% endwith %}
+{% include 'components/adblock_notice.html' %}</article>
 <script type="application/json" id="file-config">{{ {'id':public_id,'pageToken':page_token,'streamPath':stream_token_path,'downloadPath':download_token_path,'shareUrl':share_url,'mime':mime_type}|tojson }}</script>{% endblock %}
 
-{% block scripts %}{% if is_native_playable %}<script src="/static/vendor/videojs/video.min.js" defer>
-</script>{% endif %}<script src="/static/js/previews.js" defer>
+{% block scripts %}{% if is_native_playable %}<script src="/static/vendor/videojs/video.min.js">
+</script>{% endif %}<script src="/static/js/previews.js">
 </script>
-<script src="/static/js/player.js" defer>
+<script src="/static/js/player.js">
 </script>{% with access_page=true %}{% include 'components/ad_scripts.html' %}{% endwith %}{% endblock %}
+
+{% block inlinead %}{% with placement='inline' %}{% include 'components/ads.html' %}{% endwith %}{% endblock %}
+
+{% block sponsoredlink %}{% include 'components/smartlink.html' %}{% endblock %}

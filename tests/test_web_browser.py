@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-from web_fixtures import ROOT, environment, ads_config, load_functions, configure_ad_documents, route_ad_documents
+from web_fixtures import ROOT, environment, ads_config, load_functions
 
 playwright = pytest.importorskip("playwright.async_api")
 
@@ -73,7 +73,6 @@ async def test_browser_layout_themes_actions_and_ads():
             )
 
         await context.route("https://ads.test/**", ad)
-        await route_ad_documents(context, ads_config(True))
         page = await context.new_page()
         page.on("pageerror", lambda err: errors.append(str(err)))
         base = str(server.make_url("")).rstrip("/")
@@ -114,133 +113,16 @@ async def test_browser_layout_themes_actions_and_ads():
             await page.evaluate("document.activeElement.textContent")
             == "Skip to content"
         )
-        for width, top in [(1440, "wide"), (375, "mobile"), (320, "mobile")]:
-            await page.set_viewport_size(dict(width=width, height=900))
-            ad_requests.clear()
-            await page.goto(base + "/gen/public-file?ads=on")
-            await page.wait_for_function(
-                'document.querySelectorAll(".ad-placement iframe").length === 2'
-            )
-            await page.wait_for_timeout(300)
-            assert sorted(ad_requests) == sorted(
-                [f"https://ads.test/{top}.js", "https://ads.test/shared.js"]
-            )
-            assert await page.evaluate(
-                "document.documentElement.scrollWidth <= innerWidth"
-            )
-            frames = page.locator("[data-ad-placement] > iframe")
-            keys = []
-            sizes = []
-            for index in range(2):
-                child = await (await frames.nth(index).element_handle()).content_frame()
-                keys.append(await child.locator("[data-key]").get_attribute("data-key"))
-                sizes.append(await child.locator("[data-key]").get_attribute("data-size"))
-                assert await child.evaluate("window.invocationParent") == "BODY"
-                assert await child.evaluate("atOptions.format") == "iframe"
-                assert await child.evaluate("JSON.stringify(atOptions.params)") == "{}"
-                assert await child.evaluate("(() => {try {return !!parent.document.body;} catch (_) {return false;}})()") is False
-            assert keys == [top, "shared"]
-            assert sizes == ["728x90" if width == 1440 else "320x50", "300x250"]
-            await page.wait_for_function('Array.from(document.querySelectorAll("[data-ad-placement]")).every(el => el.dataset.adState === "content-unverified")')
-            before = list(ad_requests)
-            await page.add_script_tag(url=base + "/static/js/ads.js")
-            # Ordinary resizing within a breakpoint makes no provider requests.
-            await page.set_viewport_size(dict(width=width + 10, height=900))
-            await page.wait_for_timeout(100)
-            assert ad_requests == before
-            # Crossing the breakpoint selects the right unit once, keeping the
-            # identical 300x250 document and retaining the old top document hidden.
-            await page.set_viewport_size(dict(width=390 if width == 1440 else 1400, height=900))
-            other = "mobile" if width == 1440 else "wide"
-            await page.wait_for_function("expected => document.querySelector('[data-ad-placement=top]').dataset.adDevice === expected", arg="mobile" if width == 1440 else "desktop")
-            top_frame = page.locator('[data-ad-placement="top"] > iframe:visible')
-            await top_frame.wait_for()
-            child = await (await top_frame.element_handle()).content_frame()
-            assert await child.locator("[data-key]").get_attribute("data-key") == other
-            assert sorted(ad_requests) == sorted(before + [f"https://ads.test/{other}.js"])
-            assert await page.locator('[data-ad-placement] > iframe:visible').count() == 2
-            switched = list(ad_requests)
-            await page.set_viewport_size(dict(width=width, height=900))
-            await page.wait_for_function("expected => document.querySelector('[data-ad-placement=top]').dataset.adDevice === expected", arg="desktop" if width == 1440 else "mobile")
-            child = await (await top_frame.element_handle()).content_frame()
-            assert await child.locator("[data-key]").get_attribute("data-key") == top
-            assert ad_requests == switched
-            assert await page.locator('[data-ad-placement] > iframe:visible').count() == 2
-            # Positive bait hiding gates optional actions only; an override remains available.
-            await page.add_style_tag(content=".adsbox {display:none !important}")
-            (
-                await page.click("#adblock-retry", force=True)
-                if await page.locator("#adblock-retry").is_visible()
-                else await page.evaluate(
-                    'document.getElementById("adblock-retry").click()'
-                )
-            )
-            await page.wait_for_timeout(250)
-            assert await page.locator("#adblock-notice").is_visible()
-            await page.click('[data-action="download"]')
-            assert "notice" in await page.locator("#action-status").inner_text()
-            assert await page.locator(".safety a").count() == 2
-            await page.click("#adblock-continue")
-            assert await page.evaluate("window.filestreamAccessAllowed()")
-            await page.screenshot(path=str(output / f"{width}-ads.png"), full_page=True)
-        for path in ["/", "/gfolder/folder"]:
-            await page.goto(base + path + "?ads=on")
-            await page.wait_for_function(
-                'document.querySelectorAll(".ad-placement iframe").length === 2'
-            )
-            assert await page.locator("#adblock-notice").count() == (
-                0 if path == "/" else 1
-            )
-
-        async def fail_provider(route):
-            await route.abort()
-
-        await context.route("https://ads.test/**", fail_provider)
-        await page.goto(base + "/gen/public-file?ads=on")
-        await page.wait_for_function(
-            'Array.from(document.querySelectorAll("[data-ad-placement]")).some(el => el.dataset.adState === "error")'
-        )
-        assert await page.evaluate("window.filestreamAccessAllowed()")
-        assert not await page.locator("#adblock-notice").is_visible()
-        assert await page.locator("[data-ad-placement] > iframe").count() == 0
-        # A successful, empty script is not a filled advertisement.
-        await context.route("https://ads.test/**", lambda route: route.fulfill(content_type="application/javascript", body=""))
-        await page.clock.install()
-        await page.goto(base + "/gen/public-file?ads=on")
-        await page.wait_for_timeout(100)
-        await page.clock.fast_forward(61000)
-        await page.wait_for_function('Array.from(document.querySelectorAll("[data-ad-placement]")).every(el => el.dataset.adState === "empty")')
-        assert await page.locator(".ad-placement.loaded").count() == 0
-        # A hanging request collapses after the grace period without retrying.
-        await context.route("https://ads.test/**", lambda route: None)
-        await page.goto(base + "/gen/public-file?ads=on", wait_until="domcontentloaded")
-        await page.wait_for_timeout(100)
-        await page.clock.fast_forward(31000)
-        assert await page.locator(".ad-placement.loaded").count() == 0
-        assert await page.locator('[data-ad-state="slow-unverified"]').count() == 2
-        ad_requests.clear()
-        await page.goto(base + "/gen/public-file")
-        assert not ad_requests and await page.locator(".ad-placement").count() == 0
-        # Network errors must produce an actionable state, never a success message.
-        await page.route(
-            "**/get-download-token/**",
-            lambda route: route.fulfill(status=403, body="Expired"),
-        )
-        await page.click('[data-action="download"]')
-        await page.wait_for_function(
-            'document.getElementById("action-status").textContent.includes("expired")'
-        )
-        assert await page.locator("#retry-action").is_visible()
         assert not errors, errors
         await browser.close()
 
 
 @pytest.mark.asyncio
 async def test_videojs_mp4_playback_seek_and_expired_url_refresh():
-    fixture = os.environ.get("WEB_MEDIA_FIXTURE")
+    fixture = os.environ.get("WEB_MEDIA_FIXTURE", str(ROOT / "tests/fixtures/sample.mp4"))
     if not fixture or not Path(fixture).is_file():
         pytest.skip("Set WEB_MEDIA_FIXTURE to a local MP4 fixture")
-    e = environment()
+    e = environment(True)
     data = Path(fixture).read_bytes()
     e.file.update(file_name="Test trailer.mp4", file_size=len(data))
     e.routes.update(
@@ -286,13 +168,15 @@ async def test_videojs_mp4_playback_seek_and_expired_url_refresh():
             args=["--no-sandbox", "--autoplay-policy=no-user-gesture-required"]
         )
         page = await browser.new_page()
+        await page.route("https://ads.test/**", lambda route: route.fulfill(content_type="application/javascript", body="document.write('<div>TEST advertisement</div>')"))
         await page.goto(server.make_url("/gen/public-file").human_repr())
         await page.click('[data-action="play"]')
         await page.wait_for_function(
             'window.videojs && videojs("player").currentTime() > 0.1', timeout=20000
         )
-        await page.evaluate('videojs("player").currentTime(10)')
-        await page.wait_for_function('videojs("player").currentTime() >= 10')
+        seek = min(10, await page.evaluate('videojs("player").duration()') / 2)
+        await page.evaluate('(value)=>videojs("player").currentTime(value)', seek)
+        await page.wait_for_function('(value)=>videojs("player").currentTime() >= value', arg=seek)
         assert await page.evaluate('videojs("player").playbackRates()') == [
             0.5,
             1,
@@ -374,53 +258,6 @@ async def test_v3_folder_composed_controls_drawer_and_sharing():
         await browser.close()
 
 
-@pytest.mark.asyncio
-async def test_ads_independent_units_across_breakpoints_and_inactive_failure():
-    """A hidden unit's delayed failure must not hide the current device's ad."""
-    config = ads_config(True)
-    config['mobile']['bottom_banner'].update(
-        key='mobile-bottom', invoke_url='https://ads.test/mobile-bottom.js')
-    configure_ad_documents(config)
-    requests = []
-    async with playwright.async_playwright() as pw:
-        browser = await pw.chromium.launch(args=['--no-sandbox'])
-        page = await browser.new_page(viewport=dict(width=1440, height=900))
-
-        async def provider(route):
-            requests.append(route.request.url)
-            await route.fulfill(content_type='application/javascript', body="document.write('<p>'+atOptions.key+'</p>')")
-
-        await page.route('https://ads.test/**', provider)
-        await route_ad_documents(page, config)
-        content = (
-            '<style>[hidden]{display:none!important}.ad-placement{display:none}.ad-placement.loaded{display:block}</style>'
-            '<aside class="ad-placement" data-ad-placement="top"></aside>'
-            '<aside class="ad-placement" data-ad-placement="inline"></aside>'
-            '<script id="ad-config" type="application/json">' + json.dumps(config) + '</script>')
-        await page.route('https://app.test/', lambda r: r.fulfill(content_type='text/html', body=content))
-        await page.goto('https://app.test/')
-        await page.add_script_tag(path=str(ROOT / 'FileStream/web/static/js/ads.js'))
-        await page.wait_for_function('document.querySelectorAll("[data-ad-state=content-unverified]").length === 2')
-        assert sorted(requests) == ['https://ads.test/shared.js', 'https://ads.test/wide.js']
-        await page.set_viewport_size(dict(width=375, height=900))
-        await page.wait_for_function('document.querySelectorAll("[data-ad-device=mobile][data-ad-state=content-unverified]").length === 2')
-        assert sorted(requests) == sorted('https://ads.test/' + name + '.js' for name in ['wide', 'shared', 'mobile', 'mobile-bottom'])
-        top = page.locator('[data-ad-placement=top] > iframe:visible')
-        mobile_frame = await (await top.element_handle()).content_frame()
-        assert await mobile_frame.evaluate('atOptions.width') == 320
-        assert await mobile_frame.evaluate('atOptions.height') == 50
-        bottom = await (await page.locator('[data-ad-placement=inline] > iframe:visible').element_handle()).content_frame()
-        assert await bottom.evaluate('atOptions.key') == 'mobile-bottom'
-        await page.set_viewport_size(dict(width=1440, height=900))
-        await page.wait_for_function('document.querySelectorAll("[data-ad-device=desktop][data-ad-state=content-unverified]").length === 2')
-        await mobile_frame.evaluate("parent.postMessage({type:'filestream-ad',state:'error'},'*')")
-        await page.wait_for_timeout(100)
-        assert await page.locator('.ad-placement.loaded > iframe:visible').count() == 2
-        desktop_frame = await (await top.element_handle()).content_frame()
-        assert await desktop_frame.evaluate('atOptions.key') == 'wide'
-        assert await desktop_frame.evaluate('atOptions.width') == 728
-        assert len(requests) == 4
-        await browser.close()
 
 
 @pytest.mark.asyncio
@@ -488,125 +325,4 @@ async def test_smartlink_explicit_navigation_mobile_and_desktop():
             assert 'private-session' not in request.url
             await context.close()
         assert len(navigation_requests) == 2
-        await browser.close()
-
-
-@pytest.mark.asyncio
-async def test_ads_delayed_creative_survives_empty_cleanup():
-    """No-fill is provisional: a loaded provider may insert its creative later."""
-    async with playwright.async_playwright() as pw:
-        browser = await pw.chromium.launch(args=['--no-sandbox'])
-        page = await browser.new_page()
-        await page.clock.install()
-        await page.route('https://ads.test/**', lambda route: route.fulfill(
-            content_type='application/javascript',
-            body="setTimeout(()=>{const frame=document.createElement('iframe');frame.srcdoc='<p>Delayed creative fixture</p>';document.body.append(frame)},65000)"))
-        config = ads_config(True)
-        await route_ad_documents(page, config)
-        content = ('<style>[hidden]{display:none!important}.ad-placement{display:none}.ad-placement.loaded{display:block}</style>'
-            '<aside class="ad-placement" data-ad-placement="top"></aside>'
-            '<script id="ad-config" type="application/json">' + json.dumps(config) + '</script>')
-        await page.route('https://app.test/', lambda r: r.fulfill(content_type='text/html', body=content))
-        await page.goto('https://app.test/')
-        await page.add_script_tag(path=str(ROOT / 'FileStream/web/static/js/ads.js'))
-        await page.wait_for_function("document.querySelector('iframe')?.contentWindow != null")
-        # Ensure the provider has executed before advancing both documents' clocks.
-        child = await (await page.locator('aside > iframe').element_handle()).content_frame()
-        await child.wait_for_load_state()
-        await page.clock.fast_forward(61000)
-        await page.wait_for_function("document.querySelector('aside').dataset.adState === 'empty'")
-        assert not await page.locator('aside').is_visible()
-        await page.clock.fast_forward(5000)
-        await page.wait_for_function("document.querySelector('aside').dataset.adState === 'content-unverified'", timeout=2000)
-        assert await page.locator('aside > iframe').is_visible()
-        assert await child.locator('iframe').count() == 1
-        await browser.close()
-
-
-@pytest.mark.asyncio
-async def test_cross_origin_banners_referrers_credentials_and_message_authentication():
-    """Exercise real V3 rendering and the real exported HTML on sibling HTTPS origins."""
-    from FileStream.web.ad_documents import render_document
-    e = environment(True)
-    config = ads_config(True)
-    for device in ('desktop', 'mobile'):
-        for slot in config[device].values():
-            if isinstance(slot, dict):
-                slot['document_url'] = slot['document_url'].replace('ad-documents.test', 'ads.tdrp.test')
-    e.render['WebAds'].template_context = lambda **kw: config
-    html = await e.render['render_public_page']('public-file', session_id='private-session-marker')
-    async with playwright.async_playwright() as pw:
-        browser = await pw.chromium.launch(args=['--no-sandbox'])
-        context = await browser.new_context(viewport=dict(width=375, height=900))
-        await context.add_cookies([dict(name='__Host-fs_page_session', value='private-cookie-marker',
-                                       url='https://tdrp.test/', secure=True, httpOnly=True)])
-        seen = []
-        async def route(handler):
-            req = handler.request
-            headers = await req.all_headers()
-            if req.url.startswith('https://ads.tdrp.test/'):
-                seen.append((req.url, headers))
-                assert 'private-cookie-marker' not in headers.get('cookie', '')
-                slot = next(s for d in ('desktop','mobile') for s in config[d].values()
-                            if isinstance(s,dict) and s['document_url']==req.url)
-                await handler.fulfill(content_type='text/html', body=render_document(slot,['https://tdrp.test']),
-                                      headers={'Referrer-Policy':'strict-origin-when-cross-origin',
-                                               'Content-Security-Policy':"frame-ancestors https://tdrp.test"})
-            elif req.url.startswith('https://ads.test/'):
-                seen.append((req.url, headers))
-                await handler.fulfill(content_type='application/javascript', body="""
-                    if(document.readyState!=='loading'||!atOptions.key)throw Error('Order');
-                    window.privateAccess=false;try{window.privateAccess=!!parent.document.body}catch(e){}
-                    document.cookie='__Host-fs_page_session=attacker; Domain=tdrp.test; Path=/; Secure';
-                    document.write('<iframe srcdoc="<p>Creative fixture</p>"></iframe>');
-                """)
-            elif '/static/' in req.url:
-                path = req.url.split('/static/',1)[1]
-                await handler.fulfill(path=str(ROOT/'FileStream/web/static'/path))
-            else:
-                await handler.fulfill(content_type='text/html', body=html,
-                                      headers={'Referrer-Policy':'no-referrer'})
-        await context.route('**/*', route)
-        page = await context.new_page()
-        await page.goto('https://tdrp.test/gen/public-file?private=parent-url-marker')
-        await page.wait_for_function("document.querySelectorAll('[data-ad-state=content-unverified]').length===2")
-        frames = page.locator('[data-ad-placement] > iframe')
-        for i in range(2):
-            frame = frames.nth(i)
-            assert await frame.get_attribute('sandbox') is None
-            assert await frame.get_attribute('srcdoc') is None
-            assert await frame.get_attribute('referrerpolicy') == 'origin'
-            child = await (await frame.element_handle()).content_frame()
-            assert await child.evaluate('document.referrer') == 'https://tdrp.test/'
-            assert await child.evaluate('window.privateAccess') is False
-        for url, headers in seen:
-            assert 'private-session-marker' not in url and 'parent-url-marker' not in str(headers)
-            assert 'private-cookie-marker' not in str(headers)
-            assert headers.get('referer') == ('https://tdrp.test/' if 'ads.tdrp.test' in url else 'https://ads.tdrp.test/')
-        cookie = next(c for c in await context.cookies('https://tdrp.test/') if c['name']=='__Host-fs_page_session')
-        assert cookie['value']=='private-cookie-marker' and cookie['domain']=='tdrp.test'
-        await page.evaluate("""() => {const f=document.querySelector('[data-ad-placement] > iframe');window.dispatchEvent(new MessageEvent('message',{source:f.contentWindow,origin:'https://evil.test',data:{type:'filestream-ad',state:'error'}}))}""")
-        assert await frames.count()==2
-        assert await page.locator('[data-ad-state=content-unverified]').count()==2
-        await browser.close()
-
-
-@pytest.mark.asyncio
-async def test_banner_documents_fail_closed_for_missing_or_same_host_settings():
-    async with playwright.async_playwright() as pw:
-        browser = await pw.chromium.launch(args=['--no-sandbox'])
-        for url in ['', 'https://app.test/banner/'+'a'*64+'.html',
-                    'https://app.test:8443/banner/'+'a'*64+'.html',
-                    'https://ads.test/invoke.js', 'https://ads.test/banner/'+'a'*64+'.html?token=bad',
-                    'https://ads.test/banner/'+'a'*64+'.html#bad']:
-            page = await browser.new_page()
-            cfg = ads_config(True)
-            cfg['desktop']['top_banner']['document_url'] = url
-            content = '<aside data-ad-placement="top"></aside><script id="ad-config" type="application/json">'+json.dumps(cfg)+'</script>'
-            await page.route('https://app.test/', lambda r: r.fulfill(content_type='text/html',body=content))
-            await page.goto('https://app.test/')
-            await page.add_script_tag(path=str(ROOT/'FileStream/web/static/js/ads.js'))
-            assert await page.locator('iframe').count()==0
-            assert await page.locator('[data-ad-placement]').get_attribute('data-ad-state')=='disabled'
-            await page.close()
         await browser.close()

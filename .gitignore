@@ -126,7 +126,6 @@ dmypy.json
 *.session
 *.session-journal
 
-.env
 test.py
 /test
 
@@ -134,6 +133,19 @@ streambot.log
 streambot.log.*
 .idea/workspace.xml
 *.xml
-*.xml
-.idea/workspace.xml
 .codex
+
+# Local TLS material and browser captures are private, never deployment assets.
+*.pem
+*.key
+*.har
+ad-preview-diagnostics*.json
+.preview-state/
+
+# Private environment backups must never enter Git or image contexts.
+.env.*
+
+# Never include SSH state in source or container contexts.
+.ssh/
+id_rsa
+id_ed25519

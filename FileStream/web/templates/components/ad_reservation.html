@@ -1,0 +1,3 @@
+{% set mobile = ad_config.mobile.top_banner if placement == 'top' else ad_config.mobile.bottom_banner %}
+{% set desktop = ad_config.desktop.top_banner if placement == 'top' else ad_config.desktop.inline_banner %}
+{% if ad_config.enabled and (mobile.enabled or desktop.enabled) %}<div class="ad-reservation" data-ad-for="{{ placement }}" data-mobile="{{ 'true' if mobile.enabled else 'false' }}" data-desktop="{{ 'true' if desktop.enabled else 'false' }}" style="--mobile-ad-height:{{ mobile.height }}px;--desktop-ad-height:{{ desktop.height }}px" aria-hidden="true"></div>{% endif %}

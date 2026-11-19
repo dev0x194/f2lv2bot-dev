@@ -430,13 +430,6 @@ footer a {
   width: 100%;
   min-height: 44px;
 }
-@media (max-width: 360px) {
-  main .ad-placement {
-    width: calc(100% + 2 * var(--space));
-    max-width: none;
-    margin-inline: calc(-1 * var(--space));
-  }
-}
 
 /* Web V3 — shared design tokens, local icons, no build step. */
 :root {
@@ -522,3 +515,37 @@ dialog::backdrop { background:#0009; backdrop-filter:blur(5px); } body:has(dialo
 /* Optional navigation ad, kept separate from banner delivery and file actions. */
 .sponsored-link { margin: 1.5rem auto; padding-block: 1rem; border-block: 1px solid var(--line); }
 .sponsored-link .metadata { margin-bottom: 0; }
+
+/* Parse content and controls before parser-blocking ads; visual order stays V3. */
+body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "header" "top-ad" "content" "inline-ad" "sponsored" "footer";
+  align-content: start;
+}
+.site-header { grid-area: header; min-width: 0; }
+body > main { grid-area: content; min-width: 0; margin-block: 0; }
+body > footer { grid-area: footer; margin-block: 0; }
+[data-ad-placement="top"], [data-ad-for="top"] { grid-area: top-ad; }
+[data-ad-placement="inline"], [data-ad-for="inline"] { grid-area: inline-ad; }
+.ad-placement, .ad-reservation { width: min(1120px, 100%); margin: .5rem auto; }
+.ad-placement.loaded { padding-block: .375rem; }
+.ad-label { font-size: .75rem; line-height: 1.25; margin-bottom: .1875rem; pointer-events: none; }
+.ad-reservation { display: none; pointer-events: none; }
+.ad-reservation[data-desktop="true"] { display: block; height: calc(var(--desktop-ad-height) + 1.875rem + 2px); }
+@media (max-width: 767px) {
+  .ad-reservation[data-desktop] { display: none; }
+  .ad-reservation[data-mobile="true"] { display: block; height: calc(var(--mobile-ad-height) + 1.875rem + 2px); }
+}
+@media (max-width: 360px) {
+  /* A 320px creative needs all 320 CSS pixels; do not shrink its iframe viewport. */
+  .ad-placement.loaded { border-inline: 0; border-radius: 0; }
+}
+/* Chrome desktop-site changes CSS viewport width; keep genuine desktop columns. */
+.header-actions, .brand { min-width: 0; }
+.theme select { min-width: 4.5rem; }
+
+body > .sponsored-link { grid-area: sponsored; width:min(1120px,100%); margin:0 auto; padding-inline:var(--space); }
+@media (max-width: 767px) {
+  .theme select { font-size: 1rem; }
+}

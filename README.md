@@ -16,7 +16,7 @@ A powerful, high-performance Telegram bot that streams files directly from Teleg
 
 - **Stream Instantly:** Stream directly from Telegram, with optional local hot-chunk caching for repeat downloads.
 - **Multi-Client Support:** Add multiple bot sessions to handle heavy traffic and bypass limits.
-- **Web Player:** Integrated HTML5 video player (Plyr) for seamless watching.
+- **Web Player:** Locally hosted Video.js player for seamless watching.
 - **Direct Download Links:** Generate fast, resume-supported download links.
 - **Force Subscribe:** Require users to join a channel before using the bot.
 - **NSFW Detection:** Optional automatic scanning and blocking of NSFW content (using NudeNet).
@@ -28,9 +28,8 @@ A powerful, high-performance Telegram bot that streams files directly from Teleg
 ## 🛠 Deployment
 
 Install Docker Engine with the Compose plugin on Ubuntu. Point the application
-and advertisement DNS names at the server; allow inbound TCP 80/443 and outbound
-Telegram/MongoDB/ACME access. Configure a working ACME email and distinct HTTPS
-advertisement origin in `.env`. Keep `.env` private (mode 600).
+DNS name at the server; allow inbound TCP 80/443 and outbound
+Telegram/MongoDB/ACME access. Configure a working ACME email in `.env`. Keep `.env` private (mode 600).
 
 ```bash
 git clone <repository-url>
@@ -48,12 +47,10 @@ git pull --ff-only origin dev
 sudo docker compose up -d --build
 ```
 
-`ad-export` validates configuration, generates public documents inside Docker,
-and exits successfully. Only FileStream, hardened advertisement Nginx and Traefik
-remain running. No host Python, manual exports or host configuration mounts are
-needed. Both DNS records and the ad service are required for banner operation.
-See [deployment architecture and migration](deploy/ads/README.md) before updating
-an existing multi-file installation. Never use `down -v` on an installation.
+Only `filestreambot` and `traefik` run. No advertising exporter, extra hostname,
+host Python, or manually generated files are required. Existing installations must
+follow [the migration and rollback guide](deploy/ads/README.md) before cutting over.
+Never delete persistent volumes during an update.
 
 ## ⚙️ Environment Variables
 
@@ -132,22 +129,24 @@ Create a `.env` file with the following (or set them in your cloud provider):
 - `MULTI_TOKEN1_FQDN`, `MULTI_TOKEN1_PORT`: Optional per-bot web URL overrides for `MULTI_TOKEN1`. Use these when a multi bot should generate links on its own domain or port. Keep the same pattern for `MULTI_TOKEN2`, `MULTI_TOKEN3`, and so on.
   With Docker Compose + Traefik, set `MULTI_TOKEN*_FQDN` as bare hosts and leave `MULTI_TOKEN*_PORT` blank; Traefik forwards every configured domain to the app's internal `PORT`. The Compose Traefik rule includes `MULTI_TOKEN1_FQDN` through `MULTI_TOKEN20_FQDN`.
   If you run without Traefik and set a different `MULTI_TOKEN*_PORT`, the same web app listens on that extra port automatically.
-- `WEB_ADS_ENABLED`: Set to `True`/`False` to globally enable or disable web ad slots and social bar scripts.
-- `WEB_ADS_DESKTOP_TOP_BANNER_KEY`, `WEB_ADS_DESKTOP_TOP_BANNER_INVOKE_URL`, `WEB_ADS_DESKTOP_TOP_BANNER_WIDTH`, `WEB_ADS_DESKTOP_TOP_BANNER_HEIGHT`: Desktop top banner slot config. Defaults keep the current `728x90` placement.
-- `WEB_ADS_DESKTOP_INLINE_BANNER_KEY`, `WEB_ADS_DESKTOP_INLINE_BANNER_INVOKE_URL`, `WEB_ADS_DESKTOP_INLINE_BANNER_WIDTH`, `WEB_ADS_DESKTOP_INLINE_BANNER_HEIGHT`: Desktop inline banner slot config. Defaults keep the current `300x250` placement.
-- `WEB_ADS_MOBILE_TOP_BANNER_KEY`, `WEB_ADS_MOBILE_TOP_BANNER_INVOKE_URL`, `WEB_ADS_MOBILE_TOP_BANNER_WIDTH`, `WEB_ADS_MOBILE_TOP_BANNER_HEIGHT`: Mobile top banner slot config. Defaults keep the current `320x50` placement.
-- `WEB_ADS_MOBILE_BOTTOM_BANNER_KEY`, `WEB_ADS_MOBILE_BOTTOM_BANNER_INVOKE_URL`, `WEB_ADS_MOBILE_BOTTOM_BANNER_WIDTH`, `WEB_ADS_MOBILE_BOTTOM_BANNER_HEIGHT`: Mobile bottom banner slot config. Defaults keep the current `300x250` placement.
-- `WEB_ADS_DESKTOP_SOCIAL_BAR_URL`: Desktop social bar script URL. Defaults to the current hardcoded value.
-- `WEB_ADS_MOBILE_SOCIAL_BAR_URL`: Mobile social bar script URL. Defaults to the current hardcoded value.
-- `WEB_ADS_SMARTLINK_URL`: Smartlink/click-through URL used by the web ad gate. Defaults to the current hardcoded value.
-- `WEB_ADS_POPUNDER_URL`: Optional popunder script URL loaded on public web pages. Defaults to the primary bot popunder script shown in `example.env`. Leave blank to disable it.
-- `MULTI_TOKEN1_WEB_ADS_*`: Optional per-bot web ads overrides for `MULTI_TOKEN1`. Use the same suffixes as the global `WEB_ADS_*` variables, for example `MULTI_TOKEN1_WEB_ADS_ENABLED`, `MULTI_TOKEN1_WEB_ADS_DESKTOP_TOP_BANNER_KEY`, or `MULTI_TOKEN1_WEB_ADS_SMARTLINK_URL`. Keep the same pattern for `MULTI_TOKEN2`, `MULTI_TOKEN3`, and so on.
+- `WEB_ADS_ENABLED`: the sole master advertising switch. Only `True`/`1` enables
+  advertising; missing, empty, invalid or `False`/`0` disables every format.
+- Each `WEB_ADS_<PLACEMENT>_BANNER_{KEY,INVOKE_URL,WIDTH,HEIGHT}` group activates
+  automatically only when all four fields are valid. Placements: MOBILE_TOP 320x50,
+  MOBILE_BOTTOM 300x250, DESKTOP_TOP 728x90, DESKTOP_INLINE 300x250.
+- `WEB_ADS_POPUNDER_URL`, `WEB_ADS_DESKTOP_SOCIAL_BAR_URL`,
+  `WEB_ADS_MOBILE_SOCIAL_BAR_URL`: explicit valid URLs activate those optional formats
+  under the master switch. Empty means off. Clear previously inactive populated
+  URLs during migration so they cannot unexpectedly activate.
+- `WEB_ADS_SMARTLINK_URL`: optional labelled Sponsored Link, requiring a visitor click.
+- Per-client zone fields may use `MULTI_TOKEN<n>_WEB_ADS_...`; there is no per-client
+  advertising switch. Existing database/admin disable controls are retained.
 
-### Web Ads Notes
-- Leave a banner `*_KEY` or `*_INVOKE_URL` blank to disable just that placement gracefully.
-- Leave a social bar URL blank to disable that social bar gracefully.
-- If you do not set any of the new web ads variables, FileStreamBot keeps the current ad behavior by using the existing hardcoded values as defaults in config.
-- The repo template file is `example.env`; copy it to `.env` before running locally.
+Direct provider scripts have same-origin browser authority, including token access;
+this is a known security downgrade, not isolated advertising. Provider parser scripts
+can also delay initialization. See [the final advertising guide](deploy/ads/README.md)
+and [security evidence](deploy/ads/DIRECT-INTEGRATION-AUDIT.md). No production cutover
+is authorized by changing source files.
 
 ## 🧰 Admin Toggles
 

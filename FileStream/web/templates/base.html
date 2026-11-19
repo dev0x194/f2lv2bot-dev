@@ -1,16 +1,21 @@
+{% set top_ad_markup %}{% block topad %}{% endblock %}{% endset %}
+{% set inline_ad_markup %}{% block inlinead %}{% endblock %}{% endset %}
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="referrer" content="no-referrer">
+<meta name="referrer" content="{{ 'origin' if ad_config.enabled else 'no-referrer' }}">
 <title>{{ page_title or title or file_name or bot_name or 'FileStream' }}</title>
 <link rel="icon" href="/favicon.ico">
 <meta name="description" content="{{ meta_description or 'Share, stream and download files with FileStream.' }}">{% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
 <script src="/static/js/theme.js">
 </script>
 <link rel="stylesheet" href="/static/css/app.css">{% block head %}{% endblock %}
-</head>
+{% if ad_config.enabled and ad_config.popunder_url %}
+<script src="/static/js/direct-ads.js"></script>
+{% if ad_config.popunder_url %}<script>window.FileStreamDirectAds?.optional({{ ad_config.popunder_url|tojson }}, "popunder");</script>{% endif %}
+{% endif %}</head>
 <body>{% from "components/icons.html" import icon %}<noscript><p class="notice">JavaScript is needed for themes and authorized downloads/playback. You can still use the Telegram, legal and privacy links.</p></noscript>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-header">
@@ -28,7 +33,8 @@
 </select>
 </label></div>
 </header>
-{% block topad %}{% endblock %}
+{% if top_ad_markup|trim %}{% with placement='top' %}{% include 'components/ad_reservation.html' %}{% endwith %}{% endif %}
+{% if inline_ad_markup|trim %}{% with placement='inline' %}{% include 'components/ad_reservation.html' %}{% endwith %}{% endif %}
 <main id="main" tabindex="-1">{% block content %}{% endblock %}
 </main>
 <footer>
@@ -37,8 +43,13 @@
 <a href="{{ legal_url or '/legal' }}">Terms</a>
 <a href="{{ privacy_url or '/privacy' }}">Privacy</a>{% if bot_join_url %}<a href="{{ bot_join_url }}">Help in Telegram</a>{% endif %}</nav>
 </footer>
+{% block sponsoredlink %}{% endblock %}
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<script src="/static/js/app.js" defer>
+<script src="/static/js/app.js">
 </script>{% block scripts %}{% endblock %}
+<script>performance.mark('filestream:content-ready');window.dispatchEvent(new Event('filestream:content-ready'));</script>
+{% if ad_config.enabled and not ad_config.popunder_url and (top_ad_markup|trim or inline_ad_markup|trim or ad_config.has_any_social_bar) and (ad_config.has_any_banner or ad_config.has_any_social_bar) %}<script src="/static/js/direct-ads.js"></script>{% endif %}
+{{ top_ad_markup }}{{ inline_ad_markup }}
+{% if ad_config.enabled and ad_config.has_any_social_bar %}<script>window.FileStreamDirectAds?.optional({{ ad_config.social_bar_urls|tojson }}, "social");</script>{% endif %}
 </body>
 </html>

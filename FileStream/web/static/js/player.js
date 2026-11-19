@@ -133,7 +133,21 @@
         }
       } else if (action === "download") {
         const data = await issue("download");
-        location.assign(data.download_url);
+        if (document.readyState === "loading") {
+          // A parser-blocking ad may still be pending. Do not cancel the page's
+          // original navigation just to start a same-origin attachment download.
+          let transfer = document.getElementById("download-transfer");
+          if (!transfer) {
+            transfer = document.createElement("iframe");
+            transfer.id = "download-transfer";
+            transfer.title = "File download";
+            transfer.hidden = true;
+            document.body.append(transfer);
+          }
+          transfer.src = data.download_url;
+        } else {
+          location.assign(data.download_url);
+        }
       } else if (action === "play") {
         await play();
       } else if (action === "vlc") {

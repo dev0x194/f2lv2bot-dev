@@ -10,13 +10,13 @@ from urllib.parse import urlsplit
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import make_mocked_request
-from web_fixtures import environment, load_functions
+from web_fixtures import environment, load_functions, web_ads_settings, ROOT
 
 playwright = pytest.importorskip("playwright.async_api")
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("placement", ["file", "landing", "same-origin-frame"])
+@pytest.mark.parametrize("placement", ["file", "landing", "same-origin-frame", "direct-mode"])
 async def test_direct_provider_script_inherits_sensitive_application_authority(
     placement,
 ):
@@ -25,6 +25,15 @@ async def test_direct_provider_script_inherits_sensitive_application_authority(
     e.routes["Server"].HAS_SSL = True
     e.routes["build_base_url"] = lambda **kw: "https://tdrp.test"
     minted = []
+    if placement == "direct-mode":
+        e.render["WebAds"] = web_ads_settings({
+            "WEB_ADS_ENABLED": "True",
+            "WEB_ADS_DESKTOP_TOP_BANNER_WIDTH": "728",
+            "WEB_ADS_DESKTOP_TOP_BANNER_HEIGHT": "90",
+            "WEB_ADS_DESKTOP_TOP_BANNER_KEY": "audit",
+            "WEB_ADS_DESKTOP_TOP_BANNER_INVOKE_URL": "https://provider.test/audit.js",
+        })
+        e.db.get_web_ads_status.return_value = True
     privacy = load_functions(
         "FileStream/server/__init__.py", names={"web_privacy_middleware"}
     )["web_privacy_middleware"]
@@ -32,6 +41,9 @@ async def test_direct_provider_script_inherits_sensitive_application_authority(
     async def app_response(route):
         request_url = urlsplit(route.request.url)
         path = request_url.path
+        if placement == "direct-mode" and path == "/static/js/direct-ads.js":
+            await route.fulfill(path=ROOT / "FileStream/web/static/js/direct-ads.js")
+            return
         if path.startswith("/static/") or path == "/favicon.ico":
             await route.fulfill(
                 body="",
@@ -86,6 +98,7 @@ async def test_direct_provider_script_inherits_sensitive_application_authority(
     # A public-origin script can fetch a known file page even from the homepage.
     # Its authority is the embedding document's origin, not its source URL.
     script = """(async () => {
+      if(document.readyState === "loading") await new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, {once:true}));
       const host = parent;
       const parentConfig = host.document.getElementById('file-config');
       const response = await fetch('/gen/public-file');
@@ -128,6 +141,7 @@ async def test_direct_provider_script_inherits_sensitive_application_authority(
                     content_type="application/javascript", body=script
                 ),
             )
+            await context.add_init_script("localStorage.setItem('filestream-resume:fixture','42');sessionStorage.setItem('filestream-folder','/gen/public-file')")
             page = await context.new_page()
             await page.goto(
                 "https://tdrp.test/"
@@ -143,7 +157,7 @@ async def test_direct_provider_script_inherits_sensitive_application_authority(
                   const frame = document.createElement('iframe');
                   frame.src = '/ad-only-audit'; document.body.append(frame);
                 }""")
-            else:
+            elif placement != "direct-mode":
                 await page.add_script_tag(url="https://provider.test/audit.js")
             await page.wait_for_function("window.__directScriptAudit !== undefined")
             result = await page.evaluate("window.__directScriptAudit")

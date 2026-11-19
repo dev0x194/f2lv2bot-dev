@@ -37,7 +37,7 @@ def load_public_module(name, relative):
     return module
 
 
-load_public_module("FileStream.web.ad_documents", "FileStream/web/ad_documents.py")
+load_public_module("FileStream.web.direct_ads", "FileStream/web/direct_ads.py")
 
 
 def load_functions(relative, names=None, **bindings):
@@ -87,32 +87,10 @@ def ads_config(enabled=False, smartlink_url="https://ads.test/smart"):
         popunder_url="",
     )
 
-    configure_ad_documents(config)
+    config["social_bar_urls"] = dict(desktop="", mobile="")
+    config["has_any_social_bar"] = False
+    config["has_any_banner"] = enabled
     return config
-
-
-def configure_ad_documents(config):
-    from FileStream.web.ad_documents import document_url
-    for device in ("desktop", "mobile"):
-        for slot in config[device].values():
-            if isinstance(slot, dict):
-                slot["document_url"] = document_url("https://ad-documents.test", slot)
-
-
-async def route_ad_documents(context, config):
-    """Use actual exported HTML; translate only the loopback test parent origin."""
-    from FileStream.web.ad_documents import render_document
-    async def document(route):
-        slots = [s for d in ("desktop", "mobile") for s in config[d].values() if isinstance(s, dict)]
-        slot = next((s for s in slots if s.get("document_url") == route.request.url), None)
-        if slot is None:
-            await route.fulfill(status=404, body="Unknown slot")
-            return
-        parent = urllib.parse.urlsplit(route.request.frame.parent_frame.url)
-        origin = parent.scheme + "://" + parent.netloc
-        html = render_document(slot, ["https://app.test"]).replace("https://app.test", origin)
-        await route.fulfill(content_type="text/html", body=html, headers={"Referrer-Policy":"strict-origin-when-cross-origin"})
-    await context.route("https://ad-documents.test/**", document)
 
 
 def environment(enabled=False):
@@ -246,6 +224,6 @@ def web_ads_settings(values=None, bot_overrides=None):
     nodes = [node for node in tree.body if
              isinstance(node, ast.FunctionDef) and node.name in {'_bool_env', '_int_env', '_str_env'}
              or isinstance(node, ast.ClassDef) and node.name == 'WebAds']
-    namespace = dict(env={"WEB_ADS_DOCUMENT_ORIGIN": "https://ad-documents.test", **(values or {})}, _BOT_WEB_AD_OVERRIDES=bot_overrides or {})
+    namespace = dict(env=dict(values or {}), _BOT_WEB_AD_OVERRIDES=bot_overrides or {})
     exec(compile(ast.Module(body=nodes, type_ignores=[]), 'config.py', 'exec'), namespace)
     return namespace['WebAds']

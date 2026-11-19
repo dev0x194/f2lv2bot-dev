@@ -24,7 +24,7 @@
 <dd>{{ feature.text }}</dd>
 </div>{% endfor %}</dl>
 </section>
-{% with placement='inline' %}{% include 'components/ads.html' %}{% endwith %}
+
 <section class="split">
 <h2>Frequently Asked Questions</h2>
 <div>{% for faq in faq_items %}<details>
@@ -33,3 +33,7 @@
 </details>{% endfor %}</div>
 </section>{% endblock %}
 {% block scripts %}{% include 'components/ad_scripts.html' %}{% endblock %}
+
+{% block inlinead %}{% with placement='inline' %}{% include 'components/ads.html' %}{% endwith %}{% endblock %}
+
+{% block sponsoredlink %}{% include 'components/smartlink.html' %}{% endblock %}

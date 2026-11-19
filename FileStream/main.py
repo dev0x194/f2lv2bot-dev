@@ -26,6 +26,9 @@ if os.path.isfile(_env_file):
 elif os.path.isfile(".env"):
     load_dotenv(dotenv_path=".env")
 
+from FileStream.config import validate_configuration
+validate_configuration()
+
 from FileStream.server import web_server
 app = web_server()
 

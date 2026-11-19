@@ -46,7 +46,10 @@ elif os.path.isfile(".env"):
     load_dotenv(dotenv_path=".env")
 
 
-from FileStream.config import Telegram, Server
+from FileStream.config import Telegram, Server, validate_configuration
+
+# Preserve credential validation after removing the advertisement exporter gate.
+validate_configuration()
 from aiohttp import web
 from pyrogram import idle
 from pyrogram.errors import FloodWait

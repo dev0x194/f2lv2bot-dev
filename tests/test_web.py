@@ -258,39 +258,18 @@ def test_all_templates_compile_and_python_syntax():
 
 
 def test_ad_configuration_global_switch_and_independent_slots():
-    tree = ast.parse((ROOT / "FileStream/config.py").read_text())
-    cls = next(
-        n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "WebAds"
-    )
-    ns = dict(
-        env={},
-        _BOT_WEB_AD_OVERRIDES={},
-        _bool_env=lambda key, default=False: default,
-        _int_env=lambda key, default=0: default,
-        _str_env=lambda key, default="": "https://ad-documents.test" if key == "WEB_ADS_DOCUMENT_ORIGIN" else default,
-    )
-    exec(compile(ast.Module(body=[cls], type_ignores=[]), "config.py", "exec"), ns)
-    ads = ns["WebAds"]
+    from web_fixtures import web_ads_settings
+    values = {"WEB_ADS_ENABLED":"True", "WEB_ADS_MOBILE_BOTTOM_BANNER_KEY":"rectangle",
+              "WEB_ADS_MOBILE_BOTTOM_BANNER_INVOKE_URL":"https://ads.test/banner.js",
+              "WEB_ADS_MOBILE_BOTTOM_BANNER_WIDTH":"300", "WEB_ADS_MOBILE_BOTTOM_BANNER_HEIGHT":"250"}
+    ads = web_ads_settings(values, {2:{"WEB_ADS_MOBILE_BOTTOM_BANNER_KEY":"other"}})
     bot = SimpleNamespace(client_index=2)
-    ads.BOT_OVERRIDES = {
-        2: {"WEB_ADS_MOBILE_BOTTOM_BANNER_KEY": "other", "WEB_ADS_ENABLED": "true"}
-    }
-    config = ads.template_context(enabled_override=True, bot=bot)
-    assert config["mobile"]["bottom_banner"]["key"] == "other"
-    assert config["desktop"]["inline_banner"]["key"] != "other"
-    assert not config["desktop"]["social_bar_url"]
-    assert not config["mobile"]["social_bar_url"]
-    for device, name, dimensions in [("desktop", "top_banner", (728,90)), ("desktop", "inline_banner", (300,250)), ("mobile", "top_banner", (320,50)), ("mobile", "bottom_banner", (300,250))]:
-        slot = config[device][name]
-        assert (slot["width"], slot["height"]) == dimensions
-        assert slot["enabled"]
-    for url in ["javascript:alert(1)", "http://ads.test/script", "https://user:pass@ads.test/script", ""]:
-        assert not ads._banner_slot("mobile", "key", 320, 50, url)["enabled"]
-    assert not ads._banner_slot("mobile", "", 320, 50, "https://ads.test/script")["enabled"]
-    ads.BOT_OVERRIDES[2]["WEB_ADS_ENABLED"] = "false"
-    assert not ads.template_context(enabled_override=True, bot=bot)["enabled"]
-    ads.ENABLED = False
-    assert not ads.template_context(enabled_override=True, bot=bot)["enabled"]
+    c=ads.template_context(bot=bot)
+    assert c["mobile"]["bottom_banner"]["enabled"]
+    assert c["mobile"]["bottom_banner"]["key"]=="other"
+    assert not c["desktop"]["top_banner"]["enabled"]
+    ads.ENABLED=False
+    assert not ads.template_context(enabled_override=True,bot=bot)["enabled"]
 
 
 @pytest.mark.asyncio
@@ -470,14 +449,14 @@ async def test_smartlink_configuration_precedence_and_rendering():
     assert not (await e.render['_template_context']())['ad_config']['smartlink_url']
     assert 'data-sponsored-link' not in await e.render['render_public_page']('public-file', session_id='session')
 
-    ads = web_ads_settings({'WEB_ADS_SMARTLINK_URL': url}, {2: {'WEB_ADS_SMARTLINK_URL': 'https://ads.test/bot'}})
+    ads = web_ads_settings({'WEB_ADS_ENABLED':'True', 'WEB_ADS_SMARTLINK_URL': url}, {2: {'WEB_ADS_SMARTLINK_URL': 'https://ads.test/bot'}})
     bot = SimpleNamespace(client_index=2)
     assert ads.template_context(bot=bot)['smartlink_url'] == 'https://ads.test/bot'
     assert ads.template_context()['smartlink_url'] == url
     ads.BOT_OVERRIDES[2]['WEB_ADS_SMARTLINK_URL'] = ''
     assert not ads.template_context(bot=bot)['smartlink_url']
     ads.BOT_OVERRIDES[2].update(WEB_ADS_ENABLED='False', WEB_ADS_SMARTLINK_URL=url)
-    assert not ads.template_context(enabled_override=True, bot=bot)['smartlink_url']
+    assert ads.template_context(enabled_override=True, bot=bot)['smartlink_url'] == url  # Obsolete per-bot switch has no effect.
     assert not web_ads_settings().template_context()['smartlink_url']
 
 
@@ -488,14 +467,14 @@ async def test_smartlink_unsafe_or_missing_destinations_are_not_rendered():
     for url in ['', 'javascript:alert(1)', 'data:text/html,test', '//ads.test/', 'http://ads.test/',
                 'https://user:pass@ads.test/', 'https://ads.test:bad/', 'https://[broken/',
                 'https://ads.test\\@evil.test/', 'https://ads.test/\nunsafe', 'https://ads.test/space here']:
-        e.render['WebAds'] = web_ads_settings({'WEB_ADS_SMARTLINK_URL': url})
+        e.render['WebAds'] = web_ads_settings({'WEB_ADS_ENABLED':'True', 'WEB_ADS_SMARTLINK_URL': url})
         context = await e.render['_template_context']()
         assert context['ad_config']['enabled']
         assert not context['ad_config']['smartlink_url'], url
         html = await e.render['render_public_page']('public-file', session_id='session')
         assert 'data-sponsored-link' not in html
         assert 'data-action="download"' in html
-        assert 'data-ad-placement="top"' in html
+        assert 'data-ad-placement="top"' not in html
 
 
 def test_secure_page_cookie_is_host_only_and_cannot_be_tossed_by_ad_subdomain():

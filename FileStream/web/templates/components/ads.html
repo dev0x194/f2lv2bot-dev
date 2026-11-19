@@ -1,2 +1,2 @@
-{% if ad_config.enabled %}<aside class="ad-placement" data-ad-placement="{{ placement }}" aria-label="Advertisement">
-</aside>{% endif %}{% if placement == 'inline' %}{% include 'components/smartlink.html' %}{% endif %}
+{% set eligible = (ad_config.desktop.top_banner.enabled or ad_config.mobile.top_banner.enabled) if placement == 'top' else (ad_config.desktop.inline_banner.enabled or ad_config.mobile.bottom_banner.enabled) %}
+{% if ad_config.enabled and eligible %}<aside class="ad-placement" data-ad-placement="{{ placement }}" aria-labelledby="ad-label-{{ placement }}">{% include 'components/direct_ad.html' %}</aside>{% endif %}

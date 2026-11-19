@@ -1,4 +1,1 @@
-{% if ad_config.enabled %}<script id="ad-config" type="application/json">{{ ad_config|tojson }}</script>
-<script src="/static/js/ads.js" defer>
-</script>{% if access_page and ad_config.adblock_enabled|default(true) %}<script src="/static/js/adblock.js" defer>
-</script>{% endif %}{% endif %}
+{% if ad_config.enabled and ad_config.has_any_banner %}<script id="ad-config" type="application/json">{{ ad_config|tojson }}</script>{% if access_page and ad_config.adblock_enabled|default(true) %}<script src="/static/js/adblock.js"></script>{% endif %}{% endif %}

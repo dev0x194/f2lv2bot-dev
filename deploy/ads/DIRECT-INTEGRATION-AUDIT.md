@@ -1,3 +1,8 @@
+> Historical security evidence, retained intentionally. The current source is Test A
+> only, controlled by WEB_ADS_ENABLED with safe default disabled. Old mode/gate
+> descriptions below record earlier stages, not current configuration. The same
+> origin risks remain; see [current migration and recovery guidance](README.md).
+
 # Direct Adsterra integration security audit — 2026-11-18
 
 Decision: **do not enable direct advertising JavaScript on the current FileStream
@@ -163,3 +168,13 @@ formatting, whitespace and configured-credential scans passed. Existing live
 FileStream, advertisement and Traefik container IDs/start times were unchanged.
 Only this report and `tests/test_direct_ad_security.py` are new; no application,
 template, environment, Compose, Dockerfile or advertising URL was modified.
+
+## Disabled experimental implementation (2026-11-19)
+
+The optional `direct_js` implementation is now documented in [the current guide](README.md).
+It requires an exact risk acknowledgement and script-host allowlist, remains off by
+default and was not deployed. The additional `direct-mode` browser scenario runs
+the actual parser-inserted loader and confirms the same token, storage and
+credentialed-download exposures. This finding does not reverse the audit's
+recommendation to retain cross-origin isolation. Test assertion success represents
+successful reproduction of the exposure, not satisfaction of privacy requirements.
