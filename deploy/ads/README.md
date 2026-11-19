@@ -106,3 +106,12 @@ rehearsal with `RUN_COMPOSE_TESTS=1`; it uses only uniquely named test resources
 and deletes only those test resources. `AD_SERVICE_TEST_IMAGE` and
 `AD_SERVICE_DOCKER='sudo -n docker'` enable the independent seccomp/network tests.
 Never supply production credentials to rehearsal tests.
+
+
+## Test G status
+
+The optional `WEB_ADS_MODE=provider_iframe` scaffold is **blocked for activation**:
+no official provider-hosted endpoints are approved. Keep
+`WEB_ADS_MODE=isolated_documents`. See [Test G](TEST-G.md) for policy gates,
+synthetic tests, Android acceptance requirements and rollback. No ad services,
+DNS records or volumes may be removed as part of this unverified experiment.

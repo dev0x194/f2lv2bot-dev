@@ -56,6 +56,8 @@ def configuration():
 
 
 def slots(settings):
+    if getattr(settings, "MODE", "isolated_documents") != "isolated_documents":
+        return
     from types import SimpleNamespace
 
     for index in sorted({0, *settings.BOT_OVERRIDES}):
@@ -77,6 +79,7 @@ def revision(settings, parents):
         json.dumps(
             [
                 settings.DOCUMENT_ORIGIN,
+                getattr(settings, "MODE", "isolated_documents"),
                 parents,
                 list(slots(settings)),
                 os.environ.get("WEB_ADS_SENSITIVE_COOKIE_NAMES", ""),
@@ -87,6 +90,7 @@ def revision(settings, parents):
     for filename in (
         "FileStream/config.py",
         "FileStream/web/ad_documents.py",
+        "FileStream/web/provider_iframes.py",
         "FileStream/web/tools/export_ad_documents.py",
         "FileStream/web/tools/deployment.py",
         "deploy/ads/nginx.conf",

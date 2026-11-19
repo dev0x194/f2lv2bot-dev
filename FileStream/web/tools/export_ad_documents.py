@@ -56,7 +56,10 @@ def export_documents(
         ]:
             for name in names:
                 slot = config[device][name]
-                if slot["enabled"]:
+                if (
+                    slot["enabled"]
+                    and config.get("mode", "isolated_documents") == "isolated_documents"
+                ):
                     documents[banner_id(slot)] = render_document(slot, parents)
     html_dir = output / "html" / "banner"
     html_dir.mkdir(parents=True)

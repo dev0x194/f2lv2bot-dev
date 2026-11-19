@@ -391,6 +391,11 @@ class Server:
 
 
 class WebAds:
+    MODE = _str_env("WEB_ADS_MODE", "isolated_documents")
+    PROVIDER_PUBLISHER_HOST = _str_env("FQDN", "")
+    PROVIDER_IFRAME_320X50 = _str_env("WEB_ADS_PROVIDER_IFRAME_320X50", "")
+    PROVIDER_IFRAME_300X250 = _str_env("WEB_ADS_PROVIDER_IFRAME_300X250", "")
+    PROVIDER_IFRAME_728X90 = _str_env("WEB_ADS_PROVIDER_IFRAME_728X90", "")
     ENABLED = _bool_env("WEB_ADS_ENABLED", True)
     # Required for banner delivery. Never fall back to executing ads in the app.
     DOCUMENT_ORIGIN = _str_env("WEB_ADS_DOCUMENT_ORIGIN", "")
@@ -609,12 +614,37 @@ class WebAds:
             enabled_override=enabled_flag,
         )
 
-        social_enabled = enabled_flag and cls._resolve_attr("SOCIAL_BAR_ENABLED", bot=bot)
+        contracts = []
+        mode_error = ""
+        if cls.MODE != "isolated_documents":
+            from FileStream.web.provider_iframes import approved_frame
+            mode_error = "provider-contract-unverified" if cls.MODE == "provider_iframe" else "invalid-ad-mode"
+            publisher = "https://" + cls.PROVIDER_PUBLISHER_HOST
+            for slot in (desktop_top, desktop_inline, mobile_top, mobile_bottom):
+                slot["enabled"] = False
+                slot["document_url"] = ""
+                if cls.MODE == "provider_iframe":
+                    size = str(slot["width"]) + "X" + str(slot["height"])
+                    frame = approved_frame(getattr(cls, "PROVIDER_IFRAME_" + size, ""),
+                                           slot["width"], slot["height"], publisher)
+                    if frame:
+                        slot["document_url"] = frame["url"]
+                        slot["enabled"] = enabled_flag
+                        if frame not in contracts:
+                            contracts.append(frame)
+            if contracts:
+                mode_error = ""  # Missing/unapproved slots still remain disabled individually.
+
+        social_enabled = cls.MODE == "isolated_documents" and enabled_flag and cls._resolve_attr("SOCIAL_BAR_ENABLED", bot=bot)
         desktop_social_bar_url = cls._resolve_attr("DESKTOP_SOCIAL_BAR_URL", bot=bot) if social_enabled else ""
         mobile_social_bar_url = cls._resolve_attr("MOBILE_SOCIAL_BAR_URL", bot=bot) if social_enabled else ""
 
         return {
             "enabled": enabled_flag,
+            "mode": cls.MODE,
+            "mode_error": mode_error,
+            "provider_iframe_contracts": contracts,
+            "provider_publisher_origin": "https://" + cls.PROVIDER_PUBLISHER_HOST,
             "adblock_enabled": bool(cls._resolve_attr("ADBLOCK_ENABLED", bot=bot)),
             "desktop": {
                 "top_banner": desktop_top,
@@ -627,7 +657,7 @@ class WebAds:
                 "social_bar_url": mobile_social_bar_url,
             },
             "smartlink_url": cls._validated_smartlink_url(cls._resolve_attr("SMARTLINK_URL", bot=bot)) if enabled_flag else "",
-            "popunder_url": cls._resolve_attr("POPUNDER_URL", bot=bot) if enabled_flag else "",
+            "popunder_url": cls._resolve_attr("POPUNDER_URL", bot=bot) if enabled_flag and cls.MODE == "isolated_documents" else "",
             "has_any_banner": any(
                 slot["enabled"] for slot in (desktop_top, desktop_inline, mobile_top, mobile_bottom)
             ),

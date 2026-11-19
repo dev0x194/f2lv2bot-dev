@@ -6,6 +6,9 @@
   if (!config.enabled) return;
   if (node.dataset.initialized) return;
   node.dataset.initialized = "true";
+  const mode = config.mode || "isolated_documents";
+  if (!["isolated_documents", "provider_iframe"].includes(mode)) return;
+  if (mode === "provider_iframe" && config.provider_publisher_origin !== location.origin) return;
   const viewport = matchMedia("(max-width: 767px)");
   const safeUrl = (value) => {
     try {
@@ -21,9 +24,11 @@
     frame.width = width;
     frame.height = height;
     const banner = Boolean(options);
+    const provider = options?.providerContract;
     const messageOrigin = banner ? new URL(url).origin : "null";
+    if (provider) frame.setAttribute("sandbox", provider.sandbox);
     if (!banner) frame.sandbox = "allow-scripts allow-popups";
-    frame.referrerPolicy = banner ? "origin" : "no-referrer";
+    frame.referrerPolicy = provider ? provider.referrer_policy : banner ? "origin" : "no-referrer";
     frame.allow = "camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'; usb 'none'";
     const label = document.createElement("span");
     label.className = "ad-label";
@@ -62,10 +67,19 @@
         renderState();
       }
     };
-    window.addEventListener("message", listener);
+    if (!provider) window.addEventListener("message", listener);
+    else {
+      frame.addEventListener("load", () => {
+        clearTimeout(timeout);
+        // HTTP errors/no-fill can also fire load. Never claim verified content.
+        state = "loaded-unverified";
+        renderState();
+      });
+      frame.addEventListener("error", () => fail("error"));
+    }
     // A timeout does not prove blocking or no-fill. Late provider content may still appear.
     timeout = setTimeout(() => {
-      state = "slow-unverified";
+      state = provider ? "slow-loading" : "slow-unverified";
       renderState();
       console.info("[FileStream ads] slow provider; fill unknown");
     }, 30000);
@@ -126,15 +140,25 @@
       const url = safeUrl(slot.document_url);
       if (!url) continue;
       const documentUrl = new URL(url);
-      // Reject same-origin documents, arbitrary routes, query strings and fragments.
-      if (documentUrl.hostname === location.hostname ||
-          !/^\/banner\/[a-f0-9]{64}\.html$/.test(documentUrl.pathname) ||
-          documentUrl.search || documentUrl.hash) continue;
+      // Reject the main host. Test F uses fixed hashes; Test G needs an exact contract.
+      if (documentUrl.hostname === location.hostname) continue;
+      let providerContract;
+      if (mode === "provider_iframe") {
+        providerContract = (config.provider_iframe_contracts || []).find(contract =>
+          contract.url === url && contract.width === slot.width && contract.height === slot.height);
+        if (!providerContract || documentUrl.hash || documentUrl.pathname.endsWith(".js") ||
+            /^\/22\//.test(documentUrl.pathname) ||
+            !["origin", "no-referrer"].includes(providerContract.referrer_policy) ||
+            !providerContract.sandbox || providerContract.sandbox.split(/\s+/).some(token =>
+              !["allow-scripts", "allow-same-origin", "allow-popups"].includes(token))) continue;
+      } else if (!/^\/banner\/[a-f0-9]{64}\.html$/.test(documentUrl.pathname) ||
+                 documentUrl.search || documentUrl.hash) continue;
       // Identical 300x250 configurations share one document across breakpoints;
-      // independent keys/URLs/dimensions retain their own document and options.
-      const identity = JSON.stringify([slot.key, url, slot.width, slot.height]);
+      // Test F keeps keyed configurations; Test G identifies zones by approved URL/size.
+      const identity = JSON.stringify([mode === "provider_iframe" ? mode : slot.key, url, slot.width, slot.height]);
       if (!units.has(identity)) {
         units.set(identity, mount(element, url, slot.width, slot.height, {
+          providerContract,
           key: slot.key,
           format: "iframe",
           height: slot.height,
@@ -148,7 +172,7 @@
   selectBanners();
   viewport.addEventListener("change", selectBanners);
   const device = viewport.matches ? config.mobile : config.desktop;
-  const social = safeUrl(device.social_bar_url);
+  const social = mode === "isolated_documents" ? safeUrl(device.social_bar_url) : null;
   if (social) {
     const placement = document.createElement("aside");
     placement.className = "ad-placement ad-social";
